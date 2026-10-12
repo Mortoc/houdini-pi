@@ -22,6 +22,7 @@ import {
 import type { Model } from "@earendil-works/pi-ai";
 import type { HistoryMessage, HistoryTool, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 import type { AgentEvent, AgentLike, AgentStats } from "./agent-like.js";
+import { pickDefaultModel } from "./namer.js";
 
 export interface PiAgentOptions {
   /** The repo root: pi's project, where AGENTS.md and the pi package live. */
@@ -30,6 +31,8 @@ export interface PiAgentOptions {
   extensions: InlineExtension[];
   /** Resume this session file, else start fresh. */
   sessionPath?: string;
+  /** Models for a fresh conversation, first available wins; a resumed one keeps its own. */
+  defaultModel?: string[];
   onExtensionError?: (error: unknown) => void;
 }
 
@@ -79,13 +82,30 @@ export class PiAgent implements AgentLike {
     const sessionManager = options.sessionPath === undefined ? SessionManager.create(options.cwd) : SessionManager.open(options.sessionPath);
     const runtime = await createAgentSessionRuntime(factory, { cwd: options.cwd, agentDir, sessionManager });
     const agent = new PiAgent(runtime, options);
-    runtime.setRebindSession(async (session) => agent.bind(session));
+    runtime.setRebindSession(async (session) => {
+      await agent.bind(session);
+      await agent.applyDefaultModel();
+    });
     await agent.bind(runtime.session);
+    if (options.sessionPath === undefined) await agent.applyDefaultModel();
     return agent;
   }
 
   private get session(): AgentSession {
     return this.runtime.session;
+  }
+
+  /** Put a fresh conversation on the configured default model when pi can use it. */
+  private async applyDefaultModel() {
+    const candidates = this.options.defaultModel ?? [];
+    if (candidates.length === 0) return;
+    const chosen = pickDefaultModel(await this.getAvailableModels(), candidates);
+    if (chosen === undefined) {
+      this.options.onExtensionError?.(new Error(`none of the default models is available: ${candidates.join(", ")}; using ${this.model?.id ?? "pi's default"}`));
+      return;
+    }
+    const already = this.model?.provider === chosen.provider && this.model?.id === chosen.id;
+    if (!already) await this.setModel(chosen.provider, chosen.id);
   }
 
   private async bind(session: AgentSession) {

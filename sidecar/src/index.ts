@@ -97,6 +97,7 @@ export async function main(argv = process.argv.slice(2)) {
       cwd: REPO_ROOT,
       extensions: [extension],
       ...(resumable ? { sessionPath: resume } : {}),
+      defaultModel: settings.defaultModel,
       onExtensionError: (error) => hubRef?.broadcast({ type: "error", message: `extension error: ${String(error)}` }),
     });
     agent = piAgent;

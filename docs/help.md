@@ -16,7 +16,9 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
   the same link group (1–9) and they follow the node the agent works on. *Last
   Selected Node* works too, since the agent selects what it touches.
 - **Model**: type to search. Only models that can see images are listed, so
-  the agent can check its own renders.
+  the agent can check its own renders. A new conversation starts on the first
+  available entry of `defaultModel` in the settings file (DeepSeek V4 Flash
+  Vision by default); a resumed one keeps the model it had.
 - **thinking**: how much the model reasons before acting.
 - **New Conversation**: fresh context for the same hip.
 
@@ -56,7 +58,8 @@ rollback.
 ```json
 {
   "naming": { "model": "cheapest", "renameAtUserMessages": [1, 5] },
-  "followNodes": true
+  "followNodes": true,
+  "defaultModel": ["openrouter/deepseek/deepseek-v4-flash-vision-exp", "openrouter/deepseek/deepseek-v4.1-flash"]
 }
 ```
 

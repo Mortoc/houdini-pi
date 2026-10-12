@@ -16,6 +16,17 @@ export function pickNamingModel(models: ModelRef[], setting: string): ModelRef |
   return priced[0];
 }
 
+/** The first candidate ("provider/model-id") that pi can actually use, or undefined when none is. */
+export function pickDefaultModel(available: ModelRef[], candidates: string[]): ModelRef | undefined {
+  for (const candidate of candidates) {
+    const [provider, ...rest] = candidate.split("/");
+    const id = rest.join("/");
+    const found = available.find((m) => m.provider === provider && m.id === id);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
 export function shouldRename(userMessages: number, thresholds: number[]): boolean {
   return thresholds.includes(userMessages);
 }

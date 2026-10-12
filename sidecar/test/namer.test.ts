@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanName, namingPrompt, pickNamingModel, shouldRename } from "../src/namer.js";
+import { cleanName, namingPrompt, pickDefaultModel, pickNamingModel, shouldRename } from "../src/namer.js";
 
 const models = [
   { provider: "a", id: "big", name: "Big", reasoning: true, vision: true, cost: { input: 10, output: 30 } },
@@ -17,6 +17,12 @@ describe("session naming", () => {
     expect(pickNamingModel(models, "a/big")?.id).toBe("big");
     expect(pickNamingModel([{ provider: "openrouter", id: "google/gemini", name: "g", reasoning: false, vision: true }], "openrouter/google/gemini")?.id).toBe("google/gemini");
     expect(pickNamingModel(models, "a/none")).toBeUndefined();
+  });
+
+  it("picks the first available default model, in order", () => {
+    expect(pickDefaultModel(models, ["x/none", "a/nano", "a/big"])?.id).toBe("nano");
+    expect(pickDefaultModel(models, ["x/none"])).toBeUndefined();
+    expect(pickDefaultModel([{ provider: "openrouter", id: "deepseek/deepseek-v4-flash-vision-exp", name: "d", reasoning: true, vision: true }], ["openrouter/deepseek/deepseek-v4-flash-vision-exp"])?.id).toBe("deepseek/deepseek-v4-flash-vision-exp");
   });
 
   it("renames only at the configured user-message counts", () => {

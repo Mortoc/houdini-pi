@@ -13,11 +13,21 @@ export interface Settings {
   naming: NamingSettings;
   /** Select the nodes the agent touches and steer pane tabs linked to the Pi pane at them. */
   followNodes: boolean;
+  /**
+   * Models for a new conversation, "provider/model-id", first available wins.
+   * A resumed conversation keeps the model it was using. Empty: pi's own default.
+   */
+  defaultModel: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   naming: { model: "cheapest", renameAtUserMessages: [1, 5] },
   followNodes: true,
+  defaultModel: [
+    "openrouter/deepseek/deepseek-v4-flash-vision-exp",
+    "openrouter/deepseek/deepseek-v4.1-flash",
+    "openrouter/google/gemini-3.1-flash-lite",
+  ],
 };
 
 export const SETTINGS_FILE = join(homedir(), ".houdini-pi", "settings.json");
@@ -37,5 +47,6 @@ export function loadSettings(file = SETTINGS_FILE): Settings {
   } catch (error) {
     throw new Error(`${file} is not valid JSON: ${(error as Error).message}`);
   }
-  return { naming: { ...DEFAULT_SETTINGS.naming, ...(parsed.naming ?? {}) }, followNodes: parsed.followNodes ?? DEFAULT_SETTINGS.followNodes };
+  const defaultModel = parsed.defaultModel === undefined ? DEFAULT_SETTINGS.defaultModel : Array.isArray(parsed.defaultModel) ? parsed.defaultModel : [parsed.defaultModel as unknown as string];
+  return { naming: { ...DEFAULT_SETTINGS.naming, ...(parsed.naming ?? {}) }, followNodes: parsed.followNodes ?? DEFAULT_SETTINGS.followNodes, defaultModel };
 }

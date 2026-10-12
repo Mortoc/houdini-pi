@@ -7,7 +7,7 @@ export interface ToolCall {
   result?: string;
   isError?: boolean;
   durationMs?: number;
-  image?: { mimeType: string; data: string };
+  imageUrl?: string;
 }
 
 export type Entry =
@@ -108,7 +108,7 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
         activity: "waiting for the model",
         entries: updateLastAssistant(state.entries, (e) => ({
           ...e,
-          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs, ...(message.image ? { image: message.image } : {}) } : t)),
+          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs, ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}) } : t)),
         })),
       };
     case "message_end":

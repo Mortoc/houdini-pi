@@ -15,7 +15,7 @@ describe("historyOf", () => {
         ],
       },
       { role: "toolResult", toolCallId: "c1", toolName: "mcp__fxhoudini__set_parameter", content: [{ type: "text", text: "Traceback: nope" }], isError: true },
-      { role: "toolResult", toolCallId: "c2", toolName: "inspect_cop", content: [{ type: "image", data: "AAAA", mimeType: "image/png" }, { type: "text", text: "Rendered" }], isError: false },
+      { role: "toolResult", toolCallId: "c2", toolName: "inspect_cop", content: [{ type: "image", data: "AAAA", mimeType: "image/png" }, { type: "text", text: "Rendered" }], isError: false, details: { asset: "s1/c2.png", node: "/obj/c/out" } },
       { role: "assistant", content: [{ type: "text", text: "fixed" }] },
       { role: "custom", customType: "houdini-pi-context", content: "scene", display: false },
     ];
@@ -26,7 +26,7 @@ describe("historyOf", () => {
         text: "",
         tools: [
           { toolCallId: "c1", toolName: "mcp__fxhoudini__set_parameter", args: { node_path: "/obj/w" }, result: "Traceback: nope", isError: true },
-          { toolCallId: "c2", toolName: "inspect_cop", args: { node_path: "/obj/c/out" }, result: "Rendered", isError: false, image: { data: "AAAA", mimeType: "image/png" } },
+          { toolCallId: "c2", toolName: "inspect_cop", args: { node_path: "/obj/c/out" }, result: "Rendered", isError: false, imageUrl: "/session-assets/s1/c2.png" },
         ],
       },
       { role: "assistant", text: "fixed" },

@@ -9,7 +9,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { BridgeUnreachable, HoudiniBridge } from "./bridge.js";
-import { readFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { FollowQueue } from "./follow-queue.js";
 import { Compactor, MemoryStore, type MemoryBridge } from "./memory.js";
 
@@ -41,6 +43,8 @@ export interface FollowReport {
 /** Longest edge of a COP preview. Enough to see wiring mistakes, small enough to be cheap in context. */
 export const COP_PREVIEW_SIZE = 256;
 
+export const DEFAULT_ASSETS_DIR = join(homedir(), ".houdini-pi", "assets");
+
 export const COP_NUDGE =
   "You changed Copernicus (COP) nodes this turn but have not looked at the result. Call inspect_cop on the network's output node now, fix what the image shows is wrong, then finish. Do not summarise.";
 
@@ -59,6 +63,8 @@ export interface HoudiniExtensionOptions {
   condense?: (prompt: string, ctx: ExtensionContext) => Promise<string>;
   /** Reports compaction results and failures to the host (the pane, or the terminal). */
   onCompaction?: (report: { before: number; after: number } | { error: string }) => void;
+  /** Where tool images are kept with the conversation: <assetsDir>/<session id>/<tool call id>.png. */
+  assetsDir?: string;
   /** Pin of the fxhoudinimcp MCP server to run with uvx. */
   fxhoudinimcpRef?: string;
   /** Skip MCP registration (the host already provides the server). */
@@ -191,24 +197,40 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   let nudges = 0;
   const followQueue = new FollowQueue<FollowReport>((paths) => bridge.runHelper<FollowReport>("follow_nodes", { paths }), options.followMinGapMs ?? 500);
 
-  // Previews are read once and deleted: nothing accumulates on disk, and the
-  // model never sees a path it could be tempted to re-read with execute_python.
-  const consumePng = async (path: string): Promise<string> => {
-    const png = await readFile(path);
-    await unlink(path).catch(() => undefined);
-    return png.toString("base64");
+  const assetsDir = options.assetsDir ?? DEFAULT_ASSETS_DIR;
+
+  // Houdini writes the image to the temp dir; it is moved next to the
+  // conversation so the pane can show it again after a reload, and read once
+  // for the model. The model never sees a path it could re-read with
+  // execute_python.
+  const keepAsset = async (tempPath: string, sessionId: string, name: string): Promise<{ asset: string; data: string }> => {
+    const dir = join(assetsDir, sessionId);
+    await mkdir(dir, { recursive: true });
+    const target = join(dir, name);
+    await rename(tempPath, target).catch(async () => {
+      // A temp dir on another filesystem refuses rename; copy then drop.
+      await readFile(tempPath).then((bytes) => import("node:fs/promises").then((fs) => fs.writeFile(target, bytes)));
+      await unlink(tempPath).catch(() => undefined);
+    });
+    const data = (await readFile(target)).toString("base64");
+    return { asset: `${sessionId}/${name}`, data };
   };
 
-  const inspectCop = async (nodePath: string, maxSize = COP_PREVIEW_SIZE) => {
+  const sessionIdOf = (ctx: { sessionManager?: { getSessionId(): string } } | undefined): string => ctx?.sessionManager?.getSessionId() ?? "no-session";
+
+  const safeName = (id: string) => id.replace(/[^A-Za-z0-9_.-]/g, "_");
+
+  const inspectCop = async (nodePath: string, maxSize: number, sessionId: string, callId: string) => {
     const rendered = await bridge.runHelper<RenderedCop>("render_cop", { node_path: nodePath, max_size: maxSize });
-    const data = await consumePng(rendered.path);
+    const kept = await keepAsset(rendered.path, sessionId, `${safeName(callId)}.png`);
     copDirty = false;
-    return { rendered, data };
+    return { rendered, ...kept };
   };
 
-  const inspectViewport = async (paneName?: string) => {
+  const inspectViewport = async (paneName: string | undefined, sessionId: string, callId: string) => {
     const captured = await bridge.runHelper<{ path: string; pane: string | null; frame: number }>("capture_viewport", paneName ? { pane_name: paneName } : {});
-    return { captured, data: await consumePng(captured.path) };
+    const kept = await keepAsset(captured.path, sessionId, `${safeName(callId)}.png`);
+    return { captured, ...kept };
   };
 
   const endTurn = async () => {
@@ -299,14 +321,14 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
         node_path: Type.String({ description: "Absolute path of the COP node to render, usually the network's output" }),
         max_size: Type.Optional(Type.Number({ description: "Longest edge in pixels, default 256" })),
       }),
-      execute: async (_id, params) => {
-        const { rendered, data } = await inspectCop(params.node_path, params.max_size ?? COP_PREVIEW_SIZE);
+      execute: async (id, params, _signal, _update, ctx) => {
+        const { rendered, data, asset } = await inspectCop(params.node_path, params.max_size ?? COP_PREVIEW_SIZE, sessionIdOf(ctx as never), id);
         return {
           content: [
             { type: "image", data, mimeType: "image/png" },
             { type: "text", text: `Rendered ${rendered.node} at frame ${rendered.frame}. The image above is what the network produces; judge it, do not re-read it.` },
           ],
-          details: { node: rendered.node },
+          details: { node: rendered.node, asset },
         };
       },
     });
@@ -320,14 +342,14 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       parameters: Type.Object({
         pane_name: Type.Optional(Type.String({ description: "Pane tab name; default: the first scene viewer" })),
       }),
-      execute: async (_id, params) => {
-        const { captured, data } = await inspectViewport(params.pane_name);
+      execute: async (id, params, _signal, _update, ctx) => {
+        const { captured, data, asset } = await inspectViewport(params.pane_name, sessionIdOf(ctx as never), id);
         return {
           content: [
             { type: "image", data, mimeType: "image/png" },
             { type: "text", text: `Viewport at frame ${captured.frame}. The image above is in your context; judge it, do not re-read it.` },
           ],
-          details: { pane: captured.pane },
+          details: { pane: captured.pane, asset },
         };
       },
     });
@@ -340,7 +362,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
           ctx.ui.notify("usage: /inspect-cop /path/to/cop/node", "warning");
           return;
         }
-        const { rendered, data } = await inspectCop(nodePath);
+        const { rendered, data } = await inspectCop(nodePath, COP_PREVIEW_SIZE, ctx.sessionManager.getSessionId(), `manual-${Date.now()}`);
         pi.sendMessage(
           {
             customType: "houdini-pi-inspect",

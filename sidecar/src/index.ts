@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { LinkGroup } from "@houdini-pi/protocol";
-import { createHoudiniExtension, HoudiniBridge } from "@houdini-pi/pi-package";
+import { createHoudiniExtension, DEFAULT_ASSETS_DIR, HoudiniBridge } from "@houdini-pi/pi-package";
 import type { AgentLike } from "./agent-like.js";
 import type { PiAgent as PiAgentType } from "./pi-agent.js";
 import { FakeAgent } from "./fake-agent.js";
@@ -49,6 +49,7 @@ function fakeHoudini(): HoudiniPort {
   let link: LinkGroup = "none";
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
+    loadHip: async () => {},
     linkGroup: async () => link,
     setLinkGroup: async (group) => { link = group; },
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),
@@ -91,22 +92,34 @@ export async function main(argv = process.argv.slice(2)) {
         else hubRef?.broadcast({ type: "memory_compacted", ...report });
       },
     });
-    const resume = hip === undefined ? undefined : index.get(hip);
-    const resumable = resume !== undefined && existsSync(resume);
+    // Always a fresh conversation on launch; earlier ones are in the sessions tab.
     piAgent = await PiAgent.create({
       cwd: REPO_ROOT,
       extensions: [extension],
-      ...(resumable ? { sessionPath: resume } : {}),
       defaultModel: settings.defaultModel,
       onExtensionError: (error) => hubRef?.broadcast({ type: "error", message: `extension error: ${String(error)}` }),
     });
     agent = piAgent;
-    hub = new SessionHub(agent, houdini, settings);
+    let currentHip = hip;
+    const remember = () => {
+      if (currentHip !== undefined && agent.sessionPath !== undefined) index.tag(agent.sessionPath, currentHip);
+    };
+    hub = new SessionHub(
+      agent,
+      houdini,
+      settings,
+      async (nextHip) => {
+        currentHip = nextHip;
+        // A session switch that loaded its own hip arrives here too; that one
+        // already matches and keeps its conversation.
+        const matches = agent.sessionPath !== undefined && index.hipOf(agent.sessionPath) === nextHip;
+        if (!matches) await agent.newSession();
+      },
+      (sessionPath) => index.hipOf(sessionPath),
+    );
     hubRef = hub;
-    if (hip !== undefined && agent.sessionPath !== undefined) index.set(hip, agent.sessionPath);
     agent.subscribe((event) => {
-      const remember = event.type === "agent_settled" && hip !== undefined && agent.sessionPath !== undefined;
-      if (remember) index.set(hip, agent.sessionPath!);
+      if (event.type === "agent_settled") remember();
     });
   }
 
@@ -115,6 +128,7 @@ export async function main(argv = process.argv.slice(2)) {
     port: cli.port,
     token: cli.token,
     staticDir: existsSync(cli.staticDir) ? cli.staticDir : undefined,
+    assetsDir: DEFAULT_ASSETS_DIR,
     onConnection: (socket) => hub.attach(socket),
     health: () => ({ houdiniPort: cli.houdiniPort, fakeAgent: cli.fakeAgent }),
   });

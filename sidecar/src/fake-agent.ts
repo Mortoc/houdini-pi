@@ -61,7 +61,7 @@ export class FakeAgent implements AgentLike {
         { type: "tool_execution_start", toolCallId: "call-2b", toolName: "mcp__fxhoudini__execute_python", args: { code: "hou.node('/obj/nope').destroy()" } },
         { type: "tool_execution_end", toolCallId: "call-2b", toolName: "mcp__fxhoudini__execute_python", result: JSON.stringify({ success: false, executed: false, error: "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nAttributeError: 'NoneType' object has no attribute 'destroy'\n" }), isError: true, durationMs: 9 },
         { type: "tool_execution_start", toolCallId: "call-3", toolName: "inspect_cop", args: { node_path: "/obj/hex_copnet/color_out" } },
-        { type: "tool_execution_end", toolCallId: "call-3", toolName: "inspect_cop", result: "Rendered /obj/hex_copnet/color_out", isError: false, durationMs: 300, image: { mimeType: "image/png", data: TINY_PNG } },
+        { type: "tool_execution_end", toolCallId: "call-3", toolName: "inspect_cop", result: "Rendered /obj/hex_copnet/color_out", isError: false, durationMs: 300, imageUrl: `data:image/png;base64,${TINY_PNG}` },
         ...reply.split(" ").map((word): AgentEvent => ({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: `${word} ` } })),
         { type: "message_end", message: { role: "assistant", text: reply } },
         { type: "turn_end", turnIndex: this.turns++ },
@@ -72,7 +72,7 @@ export class FakeAgent implements AgentLike {
         if (event.type === "tool_execution_start") tools.push({ toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
         if (event.type === "tool_execution_end") {
           const tool = tools.find((t) => t.toolCallId === event.toolCallId);
-          if (tool) Object.assign(tool, { result: typeof event.result === "string" ? event.result : JSON.stringify(event.result), isError: event.isError, ...(event.image ? { image: event.image } : {}) });
+          if (tool) Object.assign(tool, { result: typeof event.result === "string" ? event.result : JSON.stringify(event.result), isError: event.isError, ...(event.imageUrl ? { imageUrl: event.imageUrl } : {}) });
         }
       }
       if (!this.aborted) this.history.push({ role: "assistant", text: reply, tools });
@@ -100,7 +100,7 @@ export class FakeAgent implements AgentLike {
   async switchSession(sessionPath: string) { this.calls.push(`switch:${sessionPath}`); this.sessionPath = sessionPath; }
   async fork(entryId: string) { this.calls.push(`fork:${entryId}`); }
   async listSessions(): Promise<SessionRef[]> {
-    return [{ id: this.sessionId, path: this.sessionPath ?? "", name: undefined, firstMessage: this.history[0]?.text ?? "", modified: Date.now() }];
+    return [{ id: this.sessionId, path: this.sessionPath ?? "", name: this.sessionName, firstMessage: this.history[0]?.text ?? "", modified: Date.now(), hip: undefined }];
   }
   async compact() { this.calls.push("compact"); }
   getHistory() { return [...this.history]; }

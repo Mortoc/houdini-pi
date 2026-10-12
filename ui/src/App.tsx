@@ -81,7 +81,7 @@ export function App() {
         </>
       )}
       {tab === "memory" && <MemoryTab memory={state.memory} compaction={state.compaction} send={send} />}
-      {tab === "sessions" && <SessionsTab sessions={state.sessions} current={state.hello?.sessionPath} send={send} onOpen={() => setTab("chat")} />}
+      {tab === "sessions" && <SessionsTab sessions={state.sessions} current={state.hello?.sessionPath} hip={state.hello?.hip} send={send} onOpen={() => setTab("chat")} />}
     </div>
   );
 }

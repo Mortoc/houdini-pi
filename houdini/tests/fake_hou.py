@@ -129,6 +129,11 @@ class FakeHipFile:
     def hasUnsavedChanges(self) -> bool:  # noqa: N802
         return self._unsaved
 
+    def load(self, path: str, suppress_save_prompt: bool = False, ignore_load_warnings: bool = False):
+        self._path = path
+        self._basename = path.rsplit("/", 1)[-1]
+        self._unsaved = False
+
     def saveAsBackup(self) -> str:  # noqa: N802
         self.backups = getattr(self, "backups", 0) + 1
         return f"/scenes/backup/rock_bak{self.backups}.hip"

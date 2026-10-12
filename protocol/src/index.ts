@@ -25,6 +25,8 @@ export interface SessionRef {
   name: string | undefined;
   firstMessage: string;
   modified: number;
+  /** The hip the conversation worked on; loading the session loads it. */
+  hip: string | undefined;
 }
 
 /** Houdini's Link Pane Tab choices: "none" (Pinned), "1".."9", or "selection" (Last Selected Node). */
@@ -76,7 +78,7 @@ export type ServerMessage =
   | { type: "thinking_delta"; delta: string }
   | { type: "message_end"; role: "assistant"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; image?: ImageAttachment }
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; imageUrl?: string }
   | { type: "turn_end"; turnIndex: number }
   | { type: "settled"; aborted: boolean; cost: number; durationMs: number }
   | { type: "models"; models: ModelRef[] }
@@ -92,7 +94,8 @@ export interface HistoryTool {
   args: unknown;
   result?: string;
   isError?: boolean;
-  image?: ImageAttachment;
+  /** Where the pane loads the result image: a /session-assets/… path on the sidecar, or a data: URL. */
+  imageUrl?: string;
 }
 
 export interface HistoryMessage {

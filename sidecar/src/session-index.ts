@@ -1,19 +1,20 @@
-import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** Which pi session belongs to which .hip, so reopening a scene resumes its conversation. */
+interface Record_ {
+  hip: string;
+}
+
+/** Which hip each conversation worked on, so the sessions list can group by scene and loading one loads its hip. */
 export class SessionIndex {
   constructor(readonly file = join(homedir(), ".houdini-pi", "sessions.json")) {}
 
-  static keyFor(hipPath: string): string {
-    return createHash("sha256").update(hipPath).digest("hex").slice(0, 16);
-  }
-
-  private load(): Record<string, string> {
+  private load(): Record<string, Record_> {
     try {
-      return JSON.parse(readFileSync(this.file, "utf8")) as Record<string, string>;
+      const parsed = JSON.parse(readFileSync(this.file, "utf8")) as Record<string, unknown>;
+      // Older files mapped hip hashes to session paths; those entries have no `hip` and are dropped.
+      return Object.fromEntries(Object.entries(parsed).filter(([, v]) => typeof v === "object" && v !== null && typeof (v as Record_).hip === "string")) as Record<string, Record_>;
     } catch (error) {
       const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
       if (missing) return {};
@@ -21,13 +22,13 @@ export class SessionIndex {
     }
   }
 
-  get(hipPath: string): string | undefined {
-    return this.load()[SessionIndex.keyFor(hipPath)];
+  hipOf(sessionPath: string): string | undefined {
+    return this.load()[sessionPath]?.hip;
   }
 
-  set(hipPath: string, sessionPath: string) {
+  tag(sessionPath: string, hip: string) {
     const index = this.load();
-    index[SessionIndex.keyFor(hipPath)] = sessionPath;
+    index[sessionPath] = { hip };
     mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file, `${JSON.stringify(index, null, 2)}\n`);
   }

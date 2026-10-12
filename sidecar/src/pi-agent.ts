@@ -177,7 +177,7 @@ export class PiAgent implements AgentLike {
 
   async listSessions(): Promise<SessionRef[]> {
     const infos = await SessionManager.list(this.options.cwd);
-    return infos.map((info) => ({ id: info.id, path: info.path, name: info.name, firstMessage: info.firstMessage, modified: info.modified.getTime() }));
+    return infos.map((info) => ({ id: info.id, path: info.path, name: info.name, firstMessage: info.firstMessage, modified: info.modified.getTime(), hip: undefined }));
   }
 
   async compact() { await this.session.compact(); }
@@ -217,8 +217,8 @@ export function mapEvent(event: AgentSessionEvent, turnIndex: number): AgentEven
     case "tool_execution_start":
       return { type: "tool_execution_start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args };
     case "tool_execution_end": {
-      const image = firstImage((event.result as { content?: unknown })?.content);
-      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0, ...(image ? { image } : {}) };
+      const imageUrl = assetUrl((event.result as { details?: unknown })?.details);
+      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0, ...(imageUrl ? { imageUrl } : {}) };
     }
     case "turn_end":
       return { type: "turn_end", turnIndex };
@@ -235,10 +235,11 @@ function summariseResult(result: unknown): unknown {
   return text.length > 0 ? text : result;
 }
 
-function firstImage(content: unknown): { mimeType: string; data: string } | undefined {
-  if (!Array.isArray(content)) return undefined;
-  const part = content.find((p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "image") as { mimeType: string; data: string } | undefined;
-  return part === undefined ? undefined : { mimeType: part.mimeType, data: part.data };
+/** The pane's URL for an image a tool stored with the conversation (`details.asset`, relative to the assets dir). */
+export function assetUrl(details: unknown): string | undefined {
+  const asset = (details as { asset?: unknown } | undefined)?.asset;
+  if (typeof asset !== "string" || asset.length === 0) return undefined;
+  return `/session-assets/${asset.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 /** The transcript as the pane shows it: text plus every tool call with its result, so a reconnect loses nothing. */
@@ -272,8 +273,8 @@ export function historyOf(messages: unknown[]): HistoryMessage[] {
       const summary = summariseResult({ content: message.content });
       tool.result = typeof summary === "string" ? summary : JSON.stringify(summary);
       tool.isError = message.isError ?? false;
-      const image = firstImage(message.content);
-      if (image) tool.image = image;
+      const imageUrl = assetUrl((message as { details?: unknown }).details);
+      if (imageUrl) tool.imageUrl = imageUrl;
     }
   }
   return history;

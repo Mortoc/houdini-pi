@@ -11,7 +11,9 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
 - **Filename · conversation name**: the hip you are in, and the name the
   conversation got after your first message.
 - **chat / memory / sessions**: the conversation, the project memory stored
-  in this hip, and earlier conversations for this hip.
+  in this hip, and earlier conversations grouped by scene. Opening the pane
+  always starts a new conversation; opening an earlier one also opens the hip
+  it worked on (save your current scene first).
 - **Link Pane Tab**: put the Pi tab and a network editor or parameter view in
   the same link group (1–9) and they follow the node the agent works on. *Last
   Selected Node* works too, since the agent selects what it touches.
@@ -29,7 +31,8 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
 3. Selects and shows each node it touches, at least half a second apart.
 4. In a Copernicus network, renders the output and looks at it before
    finishing. It can screenshot the viewport the same way. You see the
-   thumbnail; click to expand. Nothing is kept on disk.
+   thumbnail; click to expand. Images are kept with the conversation
+   (`~/.houdini-pi/assets/<session>/`), so they are still there when you reopen it.
 5. Ends with a green **Done**, or the count of tool errors. No summaries.
    **■ stop** (on the activity line) halts the turn; **↶ Undo** then reverts
    everything the turn did in Houdini and puts your message back in the box.

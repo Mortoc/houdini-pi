@@ -61,6 +61,20 @@ describe("sidecar server", () => {
     expect(connections).toBe(1);
   });
 
+  it("serves conversation assets only with the token and never outside the assets dir", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "houdini-pi-assets-"));
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(dir, "s1"));
+    writeFileSync(join(dir, "s1", "c1.png"), "png!");
+    const { port } = await start({ assetsDir: dir });
+    expect((await fetch(`http://${LOOPBACK}:${port}/session-assets/s1/c1.png`)).status).toBe(401);
+    const ok = await fetch(`http://${LOOPBACK}:${port}/session-assets/s1/c1.png?token=secret`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("image/png");
+    expect(await ok.text()).toBe("png!");
+    expect((await fetch(`http://${LOOPBACK}:${port}/session-assets/..%2f..%2fetc/passwd?token=secret`)).status).toBe(404);
+  });
+
   it("serves the static dir, index at /, and never escapes it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "houdini-pi-static-"));
     writeFileSync(join(dir, "index.html"), "<h1>pane</h1>");

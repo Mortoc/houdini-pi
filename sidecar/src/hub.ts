@@ -8,6 +8,8 @@ import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
 export interface HoudiniPort {
   hipPath(): Promise<string | undefined>;
+  /** Open a hip in Houdini. Rejects when the current scene has unsaved changes. */
+  loadHip(path: string): Promise<void>;
   linkGroup(): Promise<LinkGroup | undefined>;
   setLinkGroup(group: LinkGroup): Promise<void>;
   memoryRead(): Promise<{ text: string; prevAvailable: boolean }>;
@@ -28,10 +30,16 @@ export class SessionHub {
   private promptStartedAt: number | undefined;
   private readonly namer: SessionNamer;
 
+  private currentHip: string | undefined | null = null;
+
   constructor(
     private readonly agent: AgentLike,
     private readonly houdini: HoudiniPort,
     settings: Settings = DEFAULT_SETTINGS,
+    /** Called when a pane opens on a different hip than the conversation was started for. */
+    private readonly onHipChanged?: (hip: string | undefined) => Promise<void>,
+    /** The hip a listed session worked on, from the host's index. */
+    private readonly hipOfSession: (sessionPath: string) => string | undefined = () => undefined,
   ) {
     this.namer = new SessionNamer(agent, settings.naming);
     agent.subscribe((event) => this.onAgentEvent(event));
@@ -52,6 +60,17 @@ export class SessionHub {
       linkGroup = await this.houdini.linkGroup();
     } catch (error) {
       this.sendTo(socket, errorMessage(error));
+    }
+    // Houdini rebuilds the desktop on File ▸ Open, so the pane reconnects on a
+    // new hip while the sidecar keeps running: switch conversations to match.
+    const hip_changed = this.currentHip !== null && this.currentHip !== hip;
+    this.currentHip = hip;
+    if (hip_changed && this.onHipChanged !== undefined) {
+      try {
+        await this.onHipChanged(hip);
+      } catch (error) {
+        this.sendTo(socket, errorMessage(error));
+      }
     }
     this.sendTo(socket, {
       type: "hello",
@@ -105,7 +124,7 @@ export class SessionHub {
           result: typeof event.result === "string" ? event.result : JSON.stringify(event.result),
           isError: event.isError,
           durationMs: event.durationMs,
-          ...(event.image ? { image: event.image } : {}),
+          ...(event.imageUrl ? { imageUrl: event.imageUrl } : {}),
         });
         return;
       case "turn_end":
@@ -169,10 +188,20 @@ export class SessionHub {
         await this.agent.newSession();
         await this.sendHello(socket);
         return;
-      case "switch_session":
+      case "switch_session": {
+        // The conversation belongs to a scene: load that hip too. Switch first,
+        // so the pane that reconnects after Houdini rebuilds its desktop finds
+        // the conversation already matching the hip.
+        const hip = this.hipOfSession(message.sessionPath);
+        const hip_differs = hip !== undefined && hip !== this.currentHip;
         await this.agent.switchSession(message.sessionPath);
+        if (hip_differs) {
+          this.currentHip = hip;
+          await this.houdini.loadHip(hip);
+        }
         await this.sendHello(socket);
         return;
+      }
       case "fork":
         await this.agent.fork(message.entryId);
         await this.sendHello(socket);
@@ -192,9 +221,11 @@ export class SessionHub {
         // The agent has to look at renders, so text-only models are not offered.
         this.sendTo(socket, { type: "models", models: (await this.agent.getAvailableModels()).filter((m) => m.vision) });
         return;
-      case "list_sessions":
-        this.sendTo(socket, { type: "sessions", sessions: await this.agent.listSessions() });
+      case "list_sessions": {
+        const sessions = (await this.agent.listSessions()).map((session) => ({ ...session, hip: this.hipOfSession(session.path) }));
+        this.sendTo(socket, { type: "sessions", sessions });
         return;
+      }
       case "memory_read":
         this.sendTo(socket, { type: "memory", ...(await this.houdini.memoryRead()) });
         return;

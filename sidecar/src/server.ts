@@ -10,6 +10,8 @@ export interface ServerOptions {
   port: number;
   token: string;
   staticDir: string | undefined;
+  /** Conversation assets (COP previews, viewport shots), served at /session-assets/<session>/<file> with the token. (/assets/ is the ui bundle.) */
+  assetsDir?: string;
   onConnection: (socket: WebSocket) => void;
   health?: () => Record<string, unknown>;
 }
@@ -74,6 +76,21 @@ function handleHttp(request: IncomingMessage, response: ServerResponse, options:
     const body = JSON.stringify({ ok: true, pid: process.pid, ...(options.health?.() ?? {}) });
     response.writeHead(200, { "content-type": "application/json" });
     response.end(body);
+    return;
+  }
+  if (url.pathname.startsWith("/session-assets/")) {
+    const token_matches = url.searchParams.get("token") === options.token;
+    if (!token_matches) {
+      response.writeHead(401);
+      response.end("token");
+      return;
+    }
+    if (options.assetsDir === undefined) {
+      response.writeHead(404);
+      response.end("no assets dir");
+      return;
+    }
+    serveStatic(decodeURIComponent(url.pathname.slice("/session-assets".length)), options.assetsDir, response);
     return;
   }
   if (options.staticDir === undefined) {

@@ -31,7 +31,17 @@ export function ChatLog({ entries, lastTurn, onUndoTurn }: Props) {
 
   return (
     <main className="chat" data-testid="chat" data-stuck={stuck} ref={log} onScroll={onScroll}>
-      {entries.length === 0 && <p className="muted empty">Ask for a change to the scene. Each answer is one undo step in Houdini.</p>}
+      {entries.length === 0 && (
+        <section className="welcome" data-testid="welcome">
+          <h2>Pi</h2>
+          <p>Describe a change to this scene. The agent edits it through Houdini's own tools, one undo step per turn.</p>
+          <ul>
+            <li>Drag nodes from a network editor onto this pane to talk about them.</li>
+            <li>Put this tab and a network editor in the same link group to watch it work.</li>
+            <li>Earlier conversations for this and other scenes are in the <b>sessions</b> tab.</li>
+          </ul>
+        </section>
+      )}
       {entries.map((entry) => {
         if (entry.kind === "user") return <div key={entry.id} className="bubble user" data-testid="user-bubble">{entry.text}</div>;
         if (entry.kind === "notice")

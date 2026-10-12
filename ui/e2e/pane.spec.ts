@@ -157,12 +157,16 @@ test("memory tab shows, edits and rolls back the hip memory", async ({ page }) =
   await expect(text).toHaveValue(/metres everywhere/);
 });
 
-test("sessions tab lists the current conversation; New Conversation resets the name", async ({ page }) => {
+test("a fresh conversation shows the welcome; the sessions tab lists conversations; New Conversation resets", async ({ page }) => {
   await open(page);
+  await page.getByTestId("new-session").click();
+  await expect(page.getByTestId("welcome")).toBeVisible();
   await page.getByRole("tab", { name: "sessions" }).click();
   await expect(page.getByTestId("sessions").locator("li")).toHaveCount(1);
+  await page.getByRole("tab", { name: "chat" }).click();
   await page.getByTestId("new-session").click();
   await expect(page.getByTestId("session-name")).toHaveText("New Conversation");
+  await expect(page.getByTestId("welcome")).toBeVisible();
 });
 
 test("dropped node paths become chips and ride along with the prompt", async ({ page }) => {

@@ -69,9 +69,16 @@ class FakeBridge implements HoudiniExtensionBridge {
   helperNames() { return this.calls.map((c) => c.name); }
 }
 
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const ASSETS = mkdtempSync(join(tmpdir(), "houdini-pi-assets-"));
+const toolCtx = { sessionManager: { getSessionId: () => "sess-1" } };
+
 function load(bridge: FakeBridge, extra: Partial<Parameters<typeof createHoudiniExtension>[0]> = {}) {
   const pi = new FakeExtensionAPI();
-  createHoudiniExtension({ bridge, houdiniPort: 8103, followMinGapMs: 0, ...extra })(pi as any);
+  createHoudiniExtension({ bridge, houdiniPort: 8103, followMinGapMs: 0, assetsDir: ASSETS, ...extra })(pi as any);
   return pi;
 }
 
@@ -240,38 +247,40 @@ describe("houdini extension", () => {
     expect((await settle())[0]).toBeUndefined();
 
     await modify("3", "mcp__fxhoudini__set_parameter", { node_path: "/obj/hex_copnet/blend" });
-    const result = await pi.tools.get("inspect_cop").execute("c", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, {});
+    const result = await pi.tools.get("inspect_cop").execute("call/1", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, toolCtx);
     expect(bridge.renders).toEqual(["/obj/hex_copnet/color_out"]);
     expect(result.content[0]).toEqual({ type: "image", data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"), mimeType: "image/png" });
     expect(result.content[1].text).toContain("Rendered /obj/hex_copnet/color_out");
     expect(result.content[1].text).not.toContain(png);
-    const { existsSync, writeFileSync: write2 } = await import("node:fs");
-    expect(existsSync(png), "preview is deleted once read").toBe(false);
+    expect(result.details).toEqual({ node: "/obj/hex_copnet/color_out", asset: "sess-1/call_1.png" });
+    const { existsSync, writeFileSync: write2, readFileSync } = await import("node:fs");
+    expect(existsSync(png), "the temp file moved into the conversation's assets").toBe(false);
+    expect(readFileSync(join(ASSETS, "sess-1", "call_1.png"))).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     write2(png, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     await pi.fire("before_agent_start", { prompt: "y", systemPromptOptions: {} });
     await modify("4", "mcp__fxhoudini__set_parameter", { node_path: "/obj/hex_copnet/blend" });
     write2(png, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
-    await pi.tools.get("inspect_cop").execute("d", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, {});
+    await pi.tools.get("inspect_cop").execute("d", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, toolCtx);
     expect((await settle())[0]).toBeUndefined();
 
     await modify("5", "mcp__fxhoudini__get_cop_info", { node_path: "/obj/hex_copnet/color_out" });
     expect((await settle())[0]).toBeUndefined();
   });
 
-  it("inspect_viewport returns the screenshot inline and deletes the file", async () => {
+  it("inspect_viewport returns the screenshot inline and keeps it with the conversation", async () => {
     const bridge = new FakeBridge();
-    const { mkdtempSync, writeFileSync, existsSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
+    const { writeFileSync, existsSync } = await import("node:fs");
     const png = join(mkdtempSync(join(tmpdir(), "houdini-pi-png-")), "viewport.png");
     writeFileSync(png, Buffer.from([1, 2, 3]));
     bridge.renderFile = png;
     const pi = load(bridge);
-    const result = await pi.tools.get("inspect_viewport").execute("v", { pane_name: "scene1" }, undefined, undefined, {});
+    const result = await pi.tools.get("inspect_viewport").execute("v", { pane_name: "scene1" }, undefined, undefined, toolCtx);
     expect(bridge.renders).toEqual(["viewport:scene1"]);
     expect(result.content[0]).toEqual({ type: "image", data: Buffer.from([1, 2, 3]).toString("base64"), mimeType: "image/png" });
     expect(result.content[1].text).not.toContain(png);
+    expect(result.details).toEqual({ pane: "scene1", asset: "sess-1/v.png" });
     expect(existsSync(png)).toBe(false);
+    expect(existsSync(join(ASSETS, "sess-1", "v.png"))).toBe(true);
   });
 
   it("exposes memory tools that write through the bridge", async () => {

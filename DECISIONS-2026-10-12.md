@@ -94,3 +94,16 @@ Each entry: decision, options weighed, why. Review in the morning.
 26. **A never-saved scene gets no backup and says so once** as a notice; a scene
     with edits still reports `untitled.hip` as its basename, which the old check
     read as "saved".
+27. **Tool images are conversation assets**: `~/.houdini-pi/assets/<session id>/
+    <tool call id>.png`, served by the sidecar at `/session-assets/…` with the
+    launch token, referenced from the tool result's `details.asset` (which pi
+    persists, so history replays them). The model still gets the image inline.
+    `/assets/` could not be used: Vite's bundle lives there, and the first try
+    blanked the page.
+28. **Opening the pane always starts a fresh conversation.** Earlier ones are in
+    the sessions tab, grouped by the hip they worked on (`sessions.json` now maps
+    session path → hip). Opening one also opens its hip; a scene with unsaved
+    changes refuses, rather than a modal prompt blocking the bridge.
+29. **File ▸ Open does not restart Houdini**, but it rebuilds the desktop, so the
+    pane reconnects on the new hip: the hub notices the hip change and starts a
+    new conversation unless the current one is already tagged with that hip.

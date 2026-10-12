@@ -65,7 +65,7 @@ export function ToolCard({ tool }: { tool: ToolCall }) {
   const script = scriptOf(tool);
   const result = shownResult(tool);
   const [expanded, setExpanded] = useState(false);
-  const open_by_default = script !== undefined || tool.image !== undefined || result?.level === "error";
+  const open_by_default = script !== undefined || tool.imageUrl !== undefined || result?.level === "error";
   return (
     <details className={`tool${tool.isError ? " error" : ""}${pending ? " pending" : ""}`} data-testid="tool-card" open={open_by_default}>
       <summary>
@@ -73,13 +73,13 @@ export function ToolCard({ tool }: { tool: ToolCall }) {
         {summary && <span className="tool-summary">{summary}</span>}
         <span className="tool-status">{pending ? "…" : tool.isError ? "error" : `${tool.durationMs} ms`}</span>
       </summary>
-      {tool.image !== undefined && (
+      {tool.imageUrl !== undefined && (
         <img
           className={`tool-image${expanded ? " expanded" : " thumb"}`}
           data-testid="tool-image"
           alt={`${label} result`}
           title={expanded ? "click to shrink" : "click to expand"}
-          src={`data:${tool.image.mimeType};base64,${tool.image.data}`}
+          src={withToken(tool.imageUrl)}
           onClick={() => setExpanded(!expanded)}
         />
       )}
@@ -98,4 +98,11 @@ export function ToolCard({ tool }: { tool: ToolCall }) {
       )}
     </details>
   );
+}
+
+/** Conversation-asset URLs on the sidecar need the launch token; data: URLs are self-contained. */
+export function withToken(url: string, search = window.location.search): string {
+  if (!url.startsWith("/session-assets/")) return url;
+  const token = new URLSearchParams(search).get("token") ?? "";
+  return `${url}?token=${encodeURIComponent(token)}`;
 }

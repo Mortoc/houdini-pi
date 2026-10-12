@@ -276,3 +276,13 @@ def capture_viewport(pane_name: str | None = None) -> dict[str, Any]:
     if not out.exists():
         raise RuntimeError(f"viewport capture reported success but {out} is missing")
     return {"path": str(out), "pane": pane_name, "frame": _h().frame()}
+
+
+def load_hip(path: str) -> dict[str, Any]:
+    """Open a hip for a conversation that worked on it. Refuses while the current scene has unsaved edits:
+    a modal save prompt would block this request, and silently discarding work is worse."""
+    hou = _h()
+    if hou.hipFile.hasUnsavedChanges():
+        raise RuntimeError(f"the current scene has unsaved changes; save or discard them, then open {path}")
+    hou.hipFile.load(path, suppress_save_prompt=True, ignore_load_warnings=True)
+    return {"hip": hou.hipFile.path()}

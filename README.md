@@ -64,7 +64,7 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   card shows a thumbnail, click to expand. The agent is
   made to call it after any COP change before it may finish; the picture shows
   up in the tool card. You can trigger it too: `/inspect-cop /obj/copnet/out`
-  in the pi CLI. Previews are written to the system temp dir and deleted once read. `inspect_viewport` does the same for the scene viewer.
+  in the pi CLI. Images are stored with the conversation under `~/.houdini-pi/assets/<session>/`, so a reloaded conversation still shows them. `inspect_viewport` does the same for the scene viewer.
 - **Models**: only models that accept images are offered, because the agent
   has to look at renders.
 - **Reference nodes**: drag nodes from the network editor onto the pane; they

@@ -148,3 +148,10 @@ def test_link_group_round_trips_through_the_pi_tab(hou):
     assert pi_tab.linkGroup() is hou.paneLinkType.FollowSelection
     with pytest.raises(ValueError, match="unknown link group name"):
         hooks_target.set_link_group("12")
+
+
+def test_load_hip_opens_the_file_but_never_over_unsaved_edits(hou):
+    assert hooks_target.load_hip("/scenes/other.hip") == {"hip": "/scenes/other.hip"}
+    hou.hipFile = FakeHipFile("/scenes/rock.hip", "rock.hip", unsaved=True)
+    with pytest.raises(RuntimeError, match="unsaved changes"):
+        hooks_target.load_hip("/scenes/other.hip")

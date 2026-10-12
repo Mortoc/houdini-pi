@@ -2,6 +2,7 @@ import type { ClientMessage, LinkGroup, ThinkingLevel } from "@houdini-pi/protoc
 import type { Tab } from "../App.js";
 import type { PaneState } from "../state.js";
 import type { Status } from "../ws.js";
+import { Dropdown } from "./Dropdown.js";
 import { ModelPicker } from "./ModelPicker.js";
 
 const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -31,20 +32,15 @@ export function Toolbar({ state, status, send, tab, onTab }: Props) {
           {state.sessionName}
         </span>
         <span className="spacer" />
-        <select
-          aria-label="link pane tab"
-          data-testid="link-picker"
+        <Dropdown<LinkGroup>
+          label="link pane tab"
+          testId="link-picker"
           title="Link Pane Tab: panes in the same group follow the node the agent works on"
           value={state.linkGroup ?? "none"}
+          options={LINKS}
           disabled={state.linkGroup === undefined}
-          onChange={(e) => send({ type: "set_link_group", group: e.target.value as LinkGroup })}
-        >
-          {LINKS.map((link) => (
-            <option key={link.value} value={link.value}>
-              {link.label}
-            </option>
-          ))}
-        </select>
+          onChange={(group) => send({ type: "set_link_group", group })}
+        />
         {status !== "open" && (
           <span className={`status status-${status}`} data-testid="status" title="Connection to the houdini-pi sidecar">
             {status === "connecting" ? "connecting to sidecar…" : "sidecar disconnected, reconnecting…"}
@@ -64,13 +60,13 @@ export function Toolbar({ state, status, send, tab, onTab }: Props) {
         </nav>
         <span className="spacer" />
         <ModelPicker models={state.models} current={state.model} onPick={(m) => send({ type: "set_model", provider: m.provider, modelId: m.id })} />
-        <select aria-label="thinking level" data-testid="thinking-picker" value={state.thinkingLevel} onChange={(e) => send({ type: "set_thinking", level: e.target.value as ThinkingLevel })}>
-          {LEVELS.map((level) => (
-            <option key={level} value={level}>
-              thinking: {level}
-            </option>
-          ))}
-        </select>
+        <Dropdown<ThinkingLevel>
+          label="thinking level"
+          testId="thinking-picker"
+          value={state.thinkingLevel}
+          options={LEVELS.map((level) => ({ value: level, label: `thinking: ${level}` }))}
+          onChange={(level) => send({ type: "set_thinking", level })}
+        />
       </div>
     </header>
   );

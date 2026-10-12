@@ -134,11 +134,14 @@ test("model picker searches and picks; thinking picker round-trips", async ({ pa
   await page.getByTestId("model-search").press("Enter");
   await expect(page.getByTestId("model-popup")).toHaveCount(0);
   await expect(page.getByTestId("model-picker")).toContainText("Fake Deep");
-  await page.getByTestId("thinking-picker").selectOption("high");
-  await expect(page.getByTestId("thinking-picker")).toHaveValue("high");
-  await expect(page.getByTestId("link-picker")).toHaveValue("none");
-  await page.getByTestId("link-picker").selectOption("2");
-  await expect(page.getByTestId("link-picker")).toHaveValue("2");
+  await page.getByTestId("thinking-picker").click();
+  await page.getByTestId("thinking-picker-list").getByRole("option", { name: "thinking: high" }).click();
+  await expect(page.getByTestId("thinking-picker")).toHaveAttribute("data-value", "high");
+  await expect(page.getByTestId("thinking-picker-list")).toHaveCount(0);
+  await expect(page.getByTestId("link-picker")).toHaveAttribute("data-value", "none");
+  await page.getByTestId("link-picker").click();
+  await page.getByTestId("link-picker-list").getByRole("option", { name: "Link 2" }).click();
+  await expect(page.getByTestId("link-picker")).toHaveAttribute("data-value", "2");
 });
 
 test("memory tab shows, edits and rolls back the hip memory", async ({ page }) => {

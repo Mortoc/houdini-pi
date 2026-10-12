@@ -27,7 +27,8 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
    also has "undo this turn in Houdini".
 3. Selects and shows each node it touches, at least half a second apart.
 4. In a Copernicus network, renders the output and looks at it before
-   finishing. You see the thumbnail; click to expand.
+   finishing. It can screenshot the viewport the same way. You see the
+   thumbnail; click to expand. Nothing is kept on disk.
 5. Ends with a green **Done**, or the count of tool errors. No summaries.
    **stop** halts the turn; **steer** sends a message into the running turn.
 

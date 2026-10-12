@@ -133,6 +133,7 @@ export function lastLine(text: string): string {
 
 export function toolLabel(toolName: string): string {
   if (toolName === "inspect_cop") return "inspect COP";
+  if (toolName === "inspect_viewport") return "inspect viewport";
   return toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
 }
 

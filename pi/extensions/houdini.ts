@@ -9,7 +9,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { BridgeUnreachable, HoudiniBridge } from "./bridge.js";
-import { readFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { FollowQueue } from "./follow-queue.js";
 import { Compactor, MemoryStore, type MemoryBridge } from "./memory.js";
 
@@ -106,7 +106,6 @@ export const DIRECT_TOOLS = [
   "get_wrangle_code",
   "set_wrangle_code",
   "validate_vex",
-  "capture_screenshot",
   "set_current_network",
   "get_node_errors_detailed",
   "execute_python",
@@ -192,11 +191,24 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   let nudges = 0;
   const followQueue = new FollowQueue<FollowReport>((paths) => bridge.runHelper<FollowReport>("follow_nodes", { paths }), options.followMinGapMs ?? 500);
 
+  // Previews are read once and deleted: nothing accumulates on disk, and the
+  // model never sees a path it could be tempted to re-read with execute_python.
+  const consumePng = async (path: string): Promise<string> => {
+    const png = await readFile(path);
+    await unlink(path).catch(() => undefined);
+    return png.toString("base64");
+  };
+
   const inspectCop = async (nodePath: string, maxSize = COP_PREVIEW_SIZE) => {
     const rendered = await bridge.runHelper<RenderedCop>("render_cop", { node_path: nodePath, max_size: maxSize });
-    const png = await readFile(rendered.path);
+    const data = await consumePng(rendered.path);
     copDirty = false;
-    return { rendered, data: png.toString("base64") };
+    return { rendered, data };
+  };
+
+  const inspectViewport = async (paneName?: string) => {
+    const captured = await bridge.runHelper<{ path: string; pane: string | null; frame: number }>("capture_viewport", paneName ? { pane_name: paneName } : {});
+    return { captured, data: await consumePng(captured.path) };
   };
 
   const endTurn = async () => {
@@ -292,9 +304,30 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
         return {
           content: [
             { type: "image", data, mimeType: "image/png" },
-            { type: "text", text: `Rendered ${rendered.node} at frame ${rendered.frame} to ${rendered.path}` },
+            { type: "text", text: `Rendered ${rendered.node} at frame ${rendered.frame}. The image above is what the network produces; judge it, do not re-read it.` },
           ],
-          details: { path: rendered.path, node: rendered.node },
+          details: { node: rendered.node },
+        };
+      },
+    });
+
+    pi.registerTool({
+      name: "inspect_viewport",
+      label: "Look at the viewport",
+      description:
+        "Screenshot the scene viewer (or a named pane tab) and look at it. Use this to check geometry, materials and lights after changing them. The image is returned to you.",
+      promptSnippet: "Screenshot the viewport and see it",
+      parameters: Type.Object({
+        pane_name: Type.Optional(Type.String({ description: "Pane tab name; default: the first scene viewer" })),
+      }),
+      execute: async (_id, params) => {
+        const { captured, data } = await inspectViewport(params.pane_name);
+        return {
+          content: [
+            { type: "image", data, mimeType: "image/png" },
+            { type: "text", text: `Viewport at frame ${captured.frame}. The image above is in your context; judge it, do not re-read it.` },
+          ],
+          details: { pane: captured.pane },
         };
       },
     });
@@ -313,7 +346,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
             customType: "houdini-pi-inspect",
             content: [
               { type: "image", data, mimeType: "image/png" },
-              { type: "text", text: `The artist asked you to look at ${rendered.node} (rendered to ${rendered.path}). Describe what is wrong, if anything, in one line.` },
+              { type: "text", text: `The artist asked you to look at ${rendered.node}. Describe what is wrong, if anything, in one line.` },
             ],
             display: true,
           },

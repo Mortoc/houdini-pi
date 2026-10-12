@@ -208,8 +208,17 @@ def follow_nodes(paths: list[str]) -> dict[str, Any]:
     return {"followed": target.path(), "panes": panes, "categories": categories}
 
 
-PREVIEW_DIR_NAME = ".houdini-pi/previews"
 PREVIEW_ROP = "houdini_pi_preview"
+
+
+def preview_dir():
+    """Where previews land: the system temp dir, and the sidecar deletes each one after reading it."""
+    import tempfile
+    from pathlib import Path
+
+    out = Path(tempfile.gettempdir()) / "houdini-pi"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
@@ -219,8 +228,6 @@ def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
     for the current frame and destroyed again, so the network is left as it
     was. Colour management is the ROP's default, which is what the viewer shows.
     """
-    from pathlib import Path
-
     hou = _h()
     node = hou.node(node_path)
     if node is None:
@@ -228,10 +235,7 @@ def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
     is_cop = node.type().category().name() == "Cop"
     if not is_cop:
         raise ValueError(f"{node_path} is a {node.type().category().name()} node, not a Copernicus (Cop) node")
-    out_dir = Path.home() / PREVIEW_DIR_NAME
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = f"{node.name()}_{int(hou.frame())}"
-    out = out_dir / f"{stamp}.png"
+    out = preview_dir() / f"cop_{node.name()}_{int(hou.frame())}.png"
     if out.exists():
         out.unlink()
     parent = node.parent()
@@ -250,3 +254,25 @@ def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
         errors = node.errors() if hasattr(node, "errors") else ()
         raise RuntimeError(f"rendering {node_path} produced no file at {out}; node errors: {list(errors)}")
     return {"path": str(out), "node": node.path(), "frame": hou.frame()}
+
+
+def capture_viewport(pane_name: str | None = None) -> dict[str, Any]:
+    """Screenshot the scene viewer (or the named pane tab) into the temp preview dir.
+
+    Goes through fxhoudinimcp's viewport.capture_screenshot handler so the capture
+    semantics (flipbook for scene viewers) stay upstream's.
+    """
+    from fxhoudinimcp_server import dispatcher
+
+    out = preview_dir() / f"viewport_{int(_h().frame())}.png"
+    if out.exists():
+        out.unlink()
+    params: dict[str, Any] = {"output_path": str(out)}
+    if pane_name:
+        params["pane_name"] = pane_name
+    result = dispatcher.dispatch("viewport.capture_screenshot", params)
+    if result.get("status") != "success":
+        raise RuntimeError(f"viewport capture failed: {result.get('error')}")
+    if not out.exists():
+        raise RuntimeError(f"viewport capture reported success but {out} is missing")
+    return {"path": str(out), "pane": pane_name, "frame": _h().frame()}

@@ -26,7 +26,7 @@ export class FakeAgent implements AgentLike {
   private turns = 0;
   readonly calls: string[] = [];
 
-  constructor(private readonly delayMs = 15) {}
+  constructor(private readonly delayMs = 40) {}
 
   subscribe(listener: (event: AgentEvent) => void): () => void {
     this.listeners.add(listener);

@@ -59,6 +59,10 @@ class FakeBridge implements HoudiniExtensionBridge {
         this.renders.push(kwargs["node_path"] as string);
         return { path: this.renderFile, node: kwargs["node_path"], frame: 1 } as T;
       }
+      case "capture_viewport": {
+        this.renders.push(`viewport:${kwargs["pane_name"] ?? ""}`);
+        return { path: this.renderFile, pane: kwargs["pane_name"] ?? null, frame: 1 } as T;
+      }
     }
     throw new Error(`unexpected helper ${name}`);
   }
@@ -240,13 +244,34 @@ describe("houdini extension", () => {
     expect(bridge.renders).toEqual(["/obj/hex_copnet/color_out"]);
     expect(result.content[0]).toEqual({ type: "image", data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"), mimeType: "image/png" });
     expect(result.content[1].text).toContain("Rendered /obj/hex_copnet/color_out");
+    expect(result.content[1].text).not.toContain(png);
+    const { existsSync, writeFileSync: write2 } = await import("node:fs");
+    expect(existsSync(png), "preview is deleted once read").toBe(false);
+    write2(png, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     await pi.fire("before_agent_start", { prompt: "y", systemPromptOptions: {} });
     await modify("4", "mcp__fxhoudini__set_parameter", { node_path: "/obj/hex_copnet/blend" });
+    write2(png, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     await pi.tools.get("inspect_cop").execute("d", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, {});
     expect((await settle())[0]).toBeUndefined();
 
     await modify("5", "mcp__fxhoudini__get_cop_info", { node_path: "/obj/hex_copnet/color_out" });
     expect((await settle())[0]).toBeUndefined();
+  });
+
+  it("inspect_viewport returns the screenshot inline and deletes the file", async () => {
+    const bridge = new FakeBridge();
+    const { mkdtempSync, writeFileSync, existsSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const png = join(mkdtempSync(join(tmpdir(), "houdini-pi-png-")), "viewport.png");
+    writeFileSync(png, Buffer.from([1, 2, 3]));
+    bridge.renderFile = png;
+    const pi = load(bridge);
+    const result = await pi.tools.get("inspect_viewport").execute("v", { pane_name: "scene1" }, undefined, undefined, {});
+    expect(bridge.renders).toEqual(["viewport:scene1"]);
+    expect(result.content[0]).toEqual({ type: "image", data: Buffer.from([1, 2, 3]).toString("base64"), mimeType: "image/png" });
+    expect(result.content[1].text).not.toContain(png);
+    expect(existsSync(png)).toBe(false);
   });
 
   it("exposes memory tools that write through the bridge", async () => {

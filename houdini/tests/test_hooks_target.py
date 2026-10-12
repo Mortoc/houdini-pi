@@ -99,9 +99,8 @@ def test_follow_without_a_link_group_only_selects(hou):
 
 
 def test_render_cop_uses_a_temporary_rop_image_and_removes_it(hou, tmp_path, monkeypatch):
-    monkeypatch.setattr(hooks_target, "PREVIEW_DIR_NAME", "previews-test")
     from pathlib import Path
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(hooks_target, "preview_dir", lambda: tmp_path / "previews-test" if (tmp_path / "previews-test").mkdir(exist_ok=True) is None else None)
     copnet = hou.add_node("/obj/hex_copnet", "copnet", hou.nodes["/obj"])
     color = hou.add_node("/obj/hex_copnet/color_out", "monotorgb", copnet, category="Cop")
 
@@ -117,11 +116,16 @@ def test_render_cop_uses_a_temporary_rop_image_and_removes_it(hou, tmp_path, mon
     assert report["node"] == "/obj/hex_copnet/color_out"
     assert Path(report["path"]).read_bytes() == b"png"
     assert Path(report["path"]).parent == tmp_path / "previews-test"
+    assert Path(report["path"]).name == "cop_color_out_12.png"
+
+
+def test_preview_dir_is_under_the_system_temp_dir():
+    import tempfile
+    assert hooks_target.preview_dir().parent == __import__("pathlib").Path(tempfile.gettempdir())
 
 
 def test_render_cop_refuses_non_cop_nodes_and_reports_a_missing_file(hou, tmp_path, monkeypatch):
-    from pathlib import Path
-    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(hooks_target, "preview_dir", lambda: tmp_path)
     with pytest.raises(ValueError, match="not a Copernicus"):
         hooks_target.render_cop("/obj/geo1")
     copnet = hou.add_node("/obj/c", "copnet", hou.nodes["/obj"])

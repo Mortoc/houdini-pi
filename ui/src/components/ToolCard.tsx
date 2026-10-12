@@ -59,7 +59,7 @@ export function shownResult(tool: ToolCall): ShownResult | undefined {
 }
 
 export function ToolCard({ tool }: { tool: ToolCall }) {
-  const label = tool.toolName === "inspect_cop" ? "inspect COP" : tool.toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
+  const label = tool.toolName === "inspect_cop" ? "inspect COP" : tool.toolName === "inspect_viewport" ? "inspect viewport" : tool.toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
   const summary = houdiniSummary(tool);
   const pending = tool.result === undefined;
   const script = scriptOf(tool);

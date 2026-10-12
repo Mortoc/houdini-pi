@@ -16,7 +16,7 @@
           pname = "houdini-pi";
           version = "0.1.0";
           src = self;
-          npmDepsHash = "sha256-ewuVfXp9vKmdonAnAOVFLNoaHyNERJFgbllzW4Al+08=";
+          npmDepsHash = "sha256-58BRmxMEnSxyT8re7ljcYddBgxyR9Iq2a5FAGtPlsao=";
           nodejs = pkgs.nodejs_22;
           npmBuildScript = "build";
           # Playwright's browser download has no business in a package build.

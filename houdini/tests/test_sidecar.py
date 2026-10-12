@@ -80,3 +80,19 @@ def test_ensure_sidecar_fails_loudly_when_the_child_never_answers(tmp_path: Path
     monkeypatch.setattr(sidecar, "STATE_DIR", tmp_path)
     with pytest.raises(sidecar.SidecarError, match="did not answer"):
         sidecar.ensure_sidecar(1, 8100, tmp_path, probe=lambda p: None, spawner=lambda *a: None, sleep=lambda s: None, attempts=3)
+
+
+def test_child_env_drops_houdinis_loader_and_python_vars():
+    env = sidecar.child_env({"PATH": "/bin", "LD_LIBRARY_PATH": "/hfs/dsolib", "PYTHONPATH": "/hfs/python", "HOUDINI_PI_NODE": "/n"})
+    assert env == {"PATH": "/bin", "HOUDINI_PI_NODE": "/n"}
+
+
+def test_start_sidecar_returns_pending_without_sleeping(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(sidecar, "STATE_DIR", tmp_path)
+    alive = set()
+    started = sidecar.start_sidecar(7, 8100, tmp_path, probe=lambda p: {"ok": True, "houdiniPort": 8100} if p in alive else None, spawner=lambda p, *a: alive.add(p) if False else None)
+    assert isinstance(started, sidecar.Pending)
+    assert started.url_if_ready() is None
+    alive.add(started.port)
+    assert started.url_if_ready() == started.url
+    assert started.polls == 2

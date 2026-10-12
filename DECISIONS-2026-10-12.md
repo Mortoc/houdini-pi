@@ -48,3 +48,12 @@ Each entry: decision, options weighed, why. Review in the morning.
     landed independently (pi is 1.1.0 on tekla now); the four `/opt/hfs22.0`
     defaults in the Squatch repo and the home-manager package-file entry are
     left for a separate PR, since this run is the houdini-pi repo.
+12. **Sidecar is spawned with Houdini's `LD_LIBRARY_PATH` / `PYTHONPATH` scrubbed.**
+    First live run: Node died with `undefined symbol: sqlite3session_attach` because
+    Houdini's `dsolib` shadowed the nix store's libsqlite3. Same class of problem
+    the Squatch notes record for Blender and Houdini launchers.
+13. **Panel startup is a QTimer poll, not a sleep loop.** The first run froze
+    Houdini ~5 s while `ensure_sidecar` slept on the main thread; the pane now
+    shows "Starting…" and swaps in the web view when `/health` answers.
+14. **Menu moved to Windows ▸ Squatch Studios ▸ Pi** at Mortoc's request (was a
+    top-level houdini-pi menu).

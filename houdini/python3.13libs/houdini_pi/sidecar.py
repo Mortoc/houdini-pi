@@ -98,20 +98,57 @@ def spawn(
     ]
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     log = open(STATE_DIR / f"sidecar-{port}.log", "ab")
-    popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=str(root), start_new_session=True)
+    popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=str(root), start_new_session=True, env=child_env())
     return argv
 
 
-def ensure_sidecar(
+# Houdini's process env points the dynamic loader and Python at its own
+# libraries. Node linked against the nix store then resolves libsqlite3 from
+# Houdini's dsolib and dies with "undefined symbol: sqlite3session_attach".
+SCRUBBED_ENV = ("LD_LIBRARY_PATH", "LD_PRELOAD", "PYTHONPATH", "PYTHONHOME", "QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH")
+
+
+def child_env(base: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(os.environ if base is None else base)
+    for key in SCRUBBED_ENV:
+        env.pop(key, None)
+    return env
+
+
+class Pending:
+    """A sidecar that was just spawned; `url_if_ready()` is polled from a Qt timer, never a sleep loop."""
+
+    def __init__(self, port: int, token: str, probe: Callable[[int], dict[str, Any] | None]):
+        self.port = port
+        self.token = token
+        self.probe = probe
+        self.polls = 0
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/?token={self.token}"
+
+    @property
+    def log(self) -> Path:
+        return STATE_DIR / f"sidecar-{self.port}.log"
+
+    def url_if_ready(self) -> str | None:
+        self.polls += 1
+        return self.url if self.probe(self.port) is not None else None
+
+
+def start_sidecar(
     houdini_pid: int,
     houdini_port: int,
     root: Path | None = None,
     probe: Callable[[int], dict[str, Any] | None] = probe_health,
     spawner: Callable[..., Any] = spawn,
-    sleep: Callable[[float], None] = __import__("time").sleep,
-    attempts: int = 40,
-) -> str:
-    """Return the pane URL (with token) for a sidecar bound to this Houdini, starting one if needed."""
+) -> str | Pending:
+    """The pane URL of a sidecar already bound to this Houdini, or a Pending one just spawned.
+
+    Returns immediately either way: Houdini's main thread is the caller, and a
+    sleep here is a frozen UI.
+    """
     root = root or repo_root()
     port = derive_port(houdini_pid)
     for candidate in range(port, port + PORT_SEARCH):
@@ -132,8 +169,25 @@ def ensure_sidecar(
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     token_file(port).write_text(token)
     spawner(port, houdini_port, houdini_pid, token, root)
+    return Pending(port, token, probe)
+
+
+def ensure_sidecar(
+    houdini_pid: int,
+    houdini_port: int,
+    root: Path | None = None,
+    probe: Callable[[int], dict[str, Any] | None] = probe_health,
+    spawner: Callable[..., Any] = spawn,
+    sleep: Callable[[float], None] = __import__("time").sleep,
+    attempts: int = 40,
+) -> str:
+    """Blocking form of start_sidecar, for scripts and tests. The panel must not call this."""
+    started = start_sidecar(houdini_pid, houdini_port, root, probe, spawner)
+    if isinstance(started, str):
+        return started
     for _ in range(attempts):
-        if probe(port) is not None:
-            return f"http://127.0.0.1:{port}/?token={token}"
+        url = started.url_if_ready()
+        if url is not None:
+            return url
         sleep(0.25)
-    raise SidecarError(f"sidecar did not answer on {port} within {attempts * 0.25:.0f}s; see {STATE_DIR / f'sidecar-{port}.log'}")
+    raise SidecarError(f"sidecar did not answer on {started.port} within {attempts * 0.25:.0f}s; see {started.log}")

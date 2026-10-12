@@ -1,18 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <mainMenu>
   <menuBar>
-    <subMenu id="houdini_pi_menu">
-      <label>houdini-pi</label>
-      <insertBefore>help_menu</insertBefore>
-      <scriptItem id="houdini_pi_open">
-        <label>Open Agent Pane</label>
-        <scriptCode><![CDATA[
+    <subMenu id="windows_menu">
+      <subMenu id="squatch_studios_menu">
+        <label>Squatch Studios</label>
+        <insertBefore>h.pane</insertBefore>
+        <scriptItem id="houdini_pi_open">
+          <label>Pi</label>
+          <scriptCode><![CDATA[
 import hou
 desktop = hou.ui.curDesktop()
 panel = desktop.createFloatingPaneTab(hou.paneTabType.PythonPanel)
 panel.setActiveInterface(hou.pypanel.interfaceByName("houdini_pi"))
 ]]></scriptCode>
-      </scriptItem>
+        </scriptItem>
+      </subMenu>
     </subMenu>
   </menuBar>
 </mainMenu>

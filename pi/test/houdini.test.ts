@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextBlock, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
+import { contextBlock, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
 
 type Handler = (event: any, ctx: any) => any;
 
@@ -67,6 +67,9 @@ describe("houdini extension", () => {
     expect(config.toolExposure["set_parameter"]).toBe("direct");
     expect(Object.keys(config.toolExposure)).toHaveLength(DIRECT_TOOLS.length);
     expect(mcpServerConfig(8100).env).toEqual({ HOUDINI_PORT: "8100" });
+    expect(uvxCommand({})).toBe("uvx");
+    expect(uvxCommand({ HOUDINI_PI_UVX: "/nix/store/x/bin/uvx" })).toBe("/nix/store/x/bin/uvx");
+    expect(mcpServerConfig(8100, undefined, "/x/uvx").command).toBe("/x/uvx");
   });
 
   it("skips MCP registration when the host provides the server", () => {

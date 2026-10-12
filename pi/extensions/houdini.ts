@@ -75,9 +75,14 @@ export const DIRECT_TOOLS = [
   "search_help",
 ];
 
-export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF) {
+/** The installer pins the uvx it validated in HOUDINI_PI_UVX: Houdini's PATH is not the shell's. */
+export function uvxCommand(env: NodeJS.ProcessEnv = process.env): string {
+  return env["HOUDINI_PI_UVX"] || "uvx";
+}
+
+export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF, command = uvxCommand()) {
   return {
-    command: "uvx",
+    command,
     args: ["--from", ref, "fxhoudinimcp"],
     env: { HOUDINI_PORT: String(houdiniPort) },
     exposure: "codemode" as const,

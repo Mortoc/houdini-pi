@@ -20,7 +20,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
-import type { HistoryMessage, HistoryTool, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { Answer, HistoryMessage, HistoryTool, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 import type { AgentEvent, AgentLike, AgentStats } from "./agent-like.js";
 import { pickDefaultModel } from "./namer.js";
 
@@ -224,8 +224,10 @@ export function mapEvent(event: AgentSessionEvent, turnIndex: number): AgentEven
     case "tool_execution_start":
       return { type: "tool_execution_start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args };
     case "tool_execution_end": {
-      const imageUrl = assetUrl((event.result as { details?: unknown })?.details);
-      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0, ...(imageUrl ? { imageUrl } : {}) };
+      const details = (event.result as { details?: unknown })?.details;
+      const imageUrl = assetUrl(details);
+      const answer = answerOf(details);
+      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0, ...(imageUrl ? { imageUrl } : {}), ...(answer ? { answer } : {}) };
     }
     case "turn_end":
       return { type: "turn_end", turnIndex };
@@ -240,6 +242,12 @@ function summariseResult(result: unknown): unknown {
   const content = (result as { content?: unknown })?.content;
   const text = textOf(content);
   return text.length > 0 ? text : result;
+}
+
+export function answerOf(details: unknown): Answer | undefined {
+  const answer = (details as { answer?: { markdown?: unknown; invalid?: unknown } } | undefined)?.answer;
+  if (answer === undefined || typeof answer.markdown !== "string") return undefined;
+  return { markdown: answer.markdown, invalid: (answer.invalid as Record<string, string> | undefined) ?? {} };
 }
 
 /** The pane's URL for an image a tool stored with the conversation (`details.asset`, relative to the assets dir). */
@@ -282,6 +290,8 @@ export function historyOf(messages: unknown[]): HistoryMessage[] {
       tool.isError = message.isError ?? false;
       const imageUrl = assetUrl((message as { details?: unknown }).details);
       if (imageUrl) tool.imageUrl = imageUrl;
+      const answer = answerOf((message as { details?: unknown }).details);
+      if (answer) tool.answer = answer;
     }
   }
   return history;

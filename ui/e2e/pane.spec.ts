@@ -206,6 +206,28 @@ test("reloading the pane replays tool cards and errors from history", async ({ p
   await expect(cards.nth(3).getByTestId("tool-image")).toBeVisible();
 });
 
+test("a question gets an answer block with action buttons; narration is tucked away", async ({ page }) => {
+  await open(page);
+  await page.getByTestId("prompt").fill("How do I thin the wires?");
+  await page.getByTestId("prompt").press("Enter");
+  const answer = page.getByTestId("answer");
+  await expect(answer).toBeVisible();
+  await expect(answer.locator("ol li")).toHaveCount(3);
+  const radius = answer.locator("button.action-parm");
+  await expect(radius).toHaveText(/radius/);
+  await expect(radius).toBeEnabled();
+  const ghost = answer.locator("button.action-select", { hasText: "ghost" });
+  await expect(ghost).toBeDisabled();
+  await expect(ghost).toHaveAttribute("title", "nothing at /obj/nope");
+  await expect(answer.locator("button.action-help")).toHaveText(/polyextrude help/);
+  await radius.click();
+  await expect(page.getByTestId("send")).toHaveText("send");
+  await expect(page.getByTestId("narration")).toBeVisible();
+  await expect(page.getByTestId("narration")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("assistant-bubble").last().getByTestId("tool-card")).toHaveCount(0);
+  await expect(page.getByTestId("turn-footer")).toContainText("Done");
+});
+
 test("a wrong token never reaches the sidecar", async ({ page }) => {
   await page.goto("/?token=wrong");
   await expect(page.getByTestId("status")).toBeVisible();

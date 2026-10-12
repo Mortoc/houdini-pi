@@ -59,6 +59,10 @@ class FakeBridge implements HoudiniExtensionBridge {
         this.renders.push(kwargs["node_path"] as string);
         return { path: this.renderFile, node: kwargs["node_path"], frame: 1 } as T;
       }
+      case "validate_paths": {
+        const paths = kwargs["paths"] as string[];
+        return { kinds: Object.fromEntries(paths.map((p) => [p, p.endsWith("/radius") ? "parm" : p.includes("nope") ? null : "node"])) } as T;
+      }
       case "capture_viewport": {
         this.renders.push(`viewport:${kwargs["pane_name"] ?? ""}`);
         return { path: this.renderFile, pane: kwargs["pane_name"] ?? null, frame: 1 } as T;
@@ -281,6 +285,33 @@ describe("houdini extension", () => {
     expect(result.details).toEqual({ pane: "scene1", asset: "sess-1/v.png" });
     expect(existsSync(png)).toBe(false);
     expect(existsSync(join(ASSETS, "sess-1", "v.png"))).toBe(true);
+  });
+
+  it("present_answer validates links against the scene and satisfies the question nudge", async () => {
+    const bridge = new FakeBridge();
+    const pi = load(bridge);
+    const settle = () => pi.fire("agent_before_settle", { context: { canContinue: true }, entries: [], continue: false });
+    await pi.fire("before_agent_start", { prompt: "How do I thin the wires?", systemPromptOptions: {} });
+    const [nudge] = await settle();
+    expect(nudge).toMatchObject({ continue: true, entries: [{ customType: "houdini-pi-nudge", content: expect.stringContaining("present_answer") }] });
+    expect((await settle())[0]).toBeUndefined();
+
+    const md = "1. Select [wire](houdini://select?path=/obj/geo1/wire1), set [radius](houdini://parm?path=/obj/geo1/wire1/radius). Not: [x](houdini://select?path=/obj/nope) [y](houdini://parm?path=/obj/geo1) [z](houdini://select?path=/obj/geo1/wire1/radius)";
+    const result = await pi.tools.get("present_answer").execute("a1", { markdown: md }, undefined, undefined, {});
+    expect(result.details.answer.markdown).toBe(md);
+    expect(result.details.answer.invalid).toEqual({
+      "houdini://select?path=/obj/nope": "nothing at /obj/nope",
+      "houdini://parm?path=/obj/geo1": "/obj/geo1 is a node, not a parameter",
+      "houdini://select?path=/obj/geo1/wire1/radius": "/obj/geo1/wire1/radius is a parameter, not a node",
+    });
+    expect(result.content[0].text).toContain("3 link(s)");
+
+    await pi.fire("before_agent_start", { prompt: "What is an sdfblend?", systemPromptOptions: {} });
+    await pi.tools.get("present_answer").execute("a2", { markdown: "A blend." }, undefined, undefined, {});
+    expect((await settle())[0]).toBeUndefined();
+
+    await pi.fire("before_agent_start", { prompt: "make the wires thinner", systemPromptOptions: {} });
+    expect((await settle())[0]).toBeUndefined();
   });
 
   it("exposes memory tools that write through the bridge", async () => {

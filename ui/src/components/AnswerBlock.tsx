@@ -1,0 +1,48 @@
+import { marked } from "marked";
+import { useMemo } from "react";
+import type { Answer, ClientMessage, HoudiniActionKind } from "@houdini-pi/protocol";
+import { CopyButton } from "./CopyButton.js";
+
+const KINDS: HoudiniActionKind[] = ["select", "parm", "network", "pane", "help"];
+const PARAM: Record<HoudiniActionKind, string> = { select: "path", parm: "path", network: "path", pane: "type", help: "page" };
+const ICON: Record<HoudiniActionKind, string> = { select: "◎", parm: "⚙", network: "⌂", pane: "▣", help: "?" };
+
+export function parseAction(href: string): { kind: HoudiniActionKind; value: string } | undefined {
+  const match = /^houdini:\/\/([a-z]+)\?([a-z]+)=(.+)$/.exec(href);
+  if (match === null) return undefined;
+  const [, kind, param, raw] = match as unknown as [string, HoudiniActionKind, string, string];
+  const is_known = KINDS.includes(kind) && PARAM[kind] === param;
+  return is_known ? { kind, value: decodeURIComponent(raw) } : undefined;
+}
+
+/**
+ * An answer the artist reads. `houdini://` links become buttons that act in
+ * Houdini; links the sidecar could not validate render disabled with the reason.
+ */
+export function AnswerBlock({ answer, send }: { answer: Answer; send: (message: ClientMessage) => void }) {
+  const html = useMemo(() => {
+    const renderer = new marked.Renderer();
+    renderer.link = ({ href, text }) => {
+      const action = parseAction(href);
+      if (action === undefined) return `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
+      const reason = answer.invalid[href];
+      const disabled = reason === undefined ? "" : ` disabled title="${reason.replace(/"/g, "&quot;")}"`;
+      return `<button type="button" class="action action-${action.kind}" data-href="${href}"${disabled}><span class="action-icon">${ICON[action.kind]}</span>${text}</button>`;
+    };
+    return marked.parse(answer.markdown, { async: false, renderer }) as string;
+  }, [answer]);
+
+  const onClick = (event: React.MouseEvent) => {
+    const button = (event.target as HTMLElement).closest("button.action") as HTMLButtonElement | null;
+    if (button === null || button.disabled) return;
+    const action = parseAction(button.dataset["href"] ?? "");
+    if (action !== undefined) send({ type: "houdini_action", kind: action.kind, value: action.value });
+  };
+
+  return (
+    <div className="answer" data-testid="answer" onClick={onClick}>
+      <CopyButton text={answer.markdown} />
+      <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+}

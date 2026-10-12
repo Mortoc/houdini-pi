@@ -1,4 +1,4 @@
-import type { HelloState, LinkGroup, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { Answer, HelloState, LinkGroup, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 
 export interface ToolCall {
   toolCallId: string;
@@ -8,6 +8,7 @@ export interface ToolCall {
   isError?: boolean;
   durationMs?: number;
   imageUrl?: string;
+  answer?: Answer;
 }
 
 export type Entry =
@@ -108,7 +109,7 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
         activity: "waiting for the model",
         entries: updateLastAssistant(state.entries, (e) => ({
           ...e,
-          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs, ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}) } : t)),
+          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs, ...(message.imageUrl ? { imageUrl: message.imageUrl } : {}), ...(message.answer ? { answer: message.answer } : {}) } : t)),
         })),
       };
     case "message_end":
@@ -141,6 +142,7 @@ export function lastLine(text: string): string {
 export function toolLabel(toolName: string): string {
   if (toolName === "inspect_cop") return "inspect COP";
   if (toolName === "inspect_viewport") return "inspect viewport";
+  if (toolName === "present_answer") return "answer";
   return toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
 }
 

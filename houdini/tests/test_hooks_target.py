@@ -155,3 +155,35 @@ def test_load_hip_opens_the_file_but_never_over_unsaved_edits(hou):
     hou.hipFile = FakeHipFile("/scenes/rock.hip", "rock.hip", unsaved=True)
     with pytest.raises(RuntimeError, match="unsaved changes"):
         hooks_target.load_hip("/scenes/other.hip")
+
+
+def test_validate_paths_tells_nodes_from_parms_from_nothing(hou):
+    hou.nodes["/obj/geo1/wire1"].parm_names = ("radius",)
+    report = hooks_target.validate_paths(["/obj/geo1", "/obj/geo1/wire1/radius", "/obj/nope", "/obj/geo1/wire1/nope"])
+    assert report == {"kinds": {"/obj/geo1": "node", "/obj/geo1/wire1/radius": "parm", "/obj/nope": None, "/obj/geo1/wire1/nope": None}}
+
+
+def test_actions_drive_the_right_panes(hou):
+    hou.ui = FakeUI()
+    network = FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.Pinned)
+    hou.ui.tabs = [network]
+    hou.nodes["/obj/geo1/wire1"].parm_names = ("radius",)
+
+    assert hooks_target.do_action("network", "/obj/geo1/wire1")["network"] == "/obj/geo1"
+    assert network.pwd is hou.nodes["/obj/geo1"] and network.current is hou.nodes["/obj/geo1/wire1"]
+
+    report = hooks_target.do_action("parm", "/obj/geo1/wire1/radius")
+    assert report == {"node": "/obj/geo1/wire1", "parm": "radius"}
+    parm_pane = hou.ui.paneTabOfType(hou.paneTabType.Parm)
+    assert parm_pane.current is hou.nodes["/obj/geo1/wire1"] and parm_pane.raised == 1
+    assert hou.ui.status[-1] == "houdini-pi: Radius (radius) on /obj/geo1/wire1"
+
+    assert hooks_target.do_action("pane", "SceneViewer")["opened"] is True
+    assert hooks_target.do_action("help", "/nodes/sop/polyextrude") == {"help": "/nodes/sop/polyextrude"}
+    assert hou.ui.paneTabOfType(hou.paneTabType.HelpBrowser).help_paths == ["/nodes/sop/polyextrude"]
+    assert hooks_target.do_action("select", "/obj/geo1")["followed"] == "/obj/geo1"
+
+    with pytest.raises(ValueError, match="no pane tab type"):
+        hooks_target.do_action("pane", "Nope")
+    with pytest.raises(ValueError, match="unknown action"):
+        hooks_target.do_action("dance", "x")

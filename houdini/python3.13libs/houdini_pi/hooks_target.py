@@ -286,3 +286,69 @@ def load_hip(path: str) -> dict[str, Any]:
         raise RuntimeError(f"the current scene has unsaved changes; save or discard them, then open {path}")
     hou.hipFile.load(path, suppress_save_prompt=True, ignore_load_warnings=True)
     return {"hip": hou.hipFile.path()}
+
+
+def validate_paths(paths: list[str]) -> dict[str, Any]:
+    """What each path names in the scene: "node", "parm", or None when nothing is there."""
+    hou = _h()
+    kinds: dict[str, str | None] = {}
+    for path in paths:
+        if hou.node(path) is not None:
+            kinds[path] = "node"
+        elif hou.parm(path) is not None or (hasattr(hou, "parmTuple") and hou.parmTuple(path) is not None):
+            kinds[path] = "parm"
+        else:
+            kinds[path] = None
+    return {"kinds": kinds}
+
+
+def _pane_of_type(hou: Any, name: str):
+    kind = getattr(hou.paneTabType, name, None)
+    if kind is None:
+        raise ValueError(f"no pane tab type named {name!r}")
+    tab = hou.ui.paneTabOfType(kind)
+    if tab is None:
+        tab = hou.ui.curDesktop().createFloatingPaneTab(kind)
+    tab.setIsCurrentTab()
+    return tab
+
+
+def do_action(kind: str, value: str) -> dict[str, Any]:
+    """Run one answer-button action: select, parm, network, pane or help."""
+    hou = _h()
+    if kind == "select":
+        return follow_nodes([value])
+    if kind == "network":
+        node = hou.node(value)
+        if node is None:
+            raise ValueError(f"no node at {value}")
+        target = node if node.isNetwork() else node.parent()
+        editor = hou.ui.paneTabOfType(hou.paneTabType.NetworkEditor)
+        if editor is None:
+            raise RuntimeError("no network editor is open")
+        editor.setPwd(target)
+        editor.setCurrentNode(node)
+        node.setSelected(True, clear_all_selected=True)
+        return {"network": target.path()}
+    if kind == "parm":
+        parm = hou.parm(value) or (hou.parmTuple(value) if hasattr(hou, "parmTuple") else None)
+        if parm is None:
+            raise ValueError(f"no parameter at {value}")
+        node = parm.node()
+        node.setSelected(True, clear_all_selected=True)
+        pane = hou.ui.paneTabOfType(hou.paneTabType.Parm)
+        if pane is None:
+            pane = hou.ui.curDesktop().createFloatingPaneTab(hou.paneTabType.Parm)
+        pane.setCurrentNode(node)
+        pane.setIsCurrentTab()
+        label = parm.description() if hasattr(parm, "description") else parm.name()
+        hou.ui.setStatusMessage(f"houdini-pi: {label} ({parm.name()}) on {node.path()}")
+        return {"node": node.path(), "parm": parm.name()}
+    if kind == "pane":
+        tab = _pane_of_type(hou, value)
+        return {"pane": value, "opened": tab is not None}
+    if kind == "help":
+        browser = _pane_of_type(hou, "HelpBrowser")
+        browser.displayHelpPath(value)
+        return {"help": value}
+    raise ValueError(f"unknown action {kind!r}")

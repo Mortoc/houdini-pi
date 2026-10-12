@@ -11,6 +11,9 @@ export function houdiniPort(bridge: HoudiniBridge): HoudiniPort {
   const memory = new MemoryStore(bridge);
   return {
     hipPath: async () => (await bridge.runHelper<SceneContextLite>("scene_context")).hip ?? undefined,
+    action: async (kind, value) => {
+      await bridge.runHelper("do_action", { kind, value });
+    },
     loadHip: async (path) => {
       await bridge.runHelper("load_hip", { path });
     },

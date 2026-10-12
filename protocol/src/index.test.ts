@@ -20,6 +20,7 @@ const clientMessages: ClientMessage[] = [
   { type: "undo_compaction" },
   { type: "rename_session", name: "Env light" },
   { type: "set_link_group", group: "3" },
+  { type: "houdini_action", kind: "parm", value: "/obj/geo1/wire1/radius" },
   { type: "undo_turn" },
 ];
 
@@ -35,6 +36,7 @@ const serverMessages: ServerMessage[] = [
   { type: "tool_start", toolCallId: "t1", toolName: "mcp__fxhoudini__set_parameter", args: { a: 1 } },
   { type: "tool_end", toolCallId: "t1", toolName: "x", result: "ok", isError: false, durationMs: 3 },
   { type: "tool_end", toolCallId: "t2", toolName: "inspect_cop", result: "Rendered", isError: false, durationMs: 3, imageUrl: "/session-assets/s1/t2.png" },
+  { type: "tool_end", toolCallId: "t3", toolName: "present_answer", result: "shown", isError: false, durationMs: 1, answer: { markdown: "# Hi", invalid: {} } },
   { type: "turn_end", turnIndex: 0 },
   { type: "settled", aborted: false, cost: 0.01, durationMs: 1200 },
   { type: "models", models: [] },

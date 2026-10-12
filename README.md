@@ -57,6 +57,9 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   jump to the node's network and parameters as the agent works.
   Selections are shown at least 500 ms apart so you can see each step.
   `{"followNodes": false}` in the settings file turns this off.
+- **Questions**: "how do I…" gets a Markdown answer with buttons that select
+  the node, show the parameter, jump to the network, open a pane or a help
+  page (`houdini://` links in the `present_answer` tool).
 - **No summaries**: the agent ends a turn silently; a green **Done** line (or
   the tool error count) tells you how it went.
 - **COP inspection**: `inspect_cop` renders a Copernicus node to a 256 px PNG

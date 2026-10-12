@@ -38,6 +38,15 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
    everything the turn did in Houdini and puts your message back in the box.
    **steer** sends a message into the running turn.
 
+## Questions and tutorials
+
+Ask "how do I…" or "why…" and the agent answers in a highlighted block instead
+of editing the scene. Steps come with buttons: **◎ select** a node, **⚙** show
+a parameter, **⌂** go to a network, **▣** open a pane, **?** open a help page.
+A struck-through button points at something that does not exist in this
+scene; hover it for the reason. Anything the model wrote outside the answer is
+tucked under "unformatted reply".
+
 ## Tool cards
 
 - Click a card to open it. Scripts (`execute_python`, `codemode`) show the

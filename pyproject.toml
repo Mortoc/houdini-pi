@@ -1,0 +1,8 @@
+[project]
+name = "houdini-pi-tests"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["houdini/tests", "tests"]

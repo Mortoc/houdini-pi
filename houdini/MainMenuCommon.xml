@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mainMenu>
+  <menuBar>
+    <subMenu id="houdini_pi_menu">
+      <label>houdini-pi</label>
+      <insertBefore>help_menu</insertBefore>
+      <scriptItem id="houdini_pi_open">
+        <label>Open Agent Pane</label>
+        <scriptCode><![CDATA[
+import hou
+desktop = hou.ui.curDesktop()
+panel = desktop.createFloatingPaneTab(hou.paneTabType.PythonPanel)
+panel.setActiveInterface(hou.pypanel.interfaceByName("houdini_pi"))
+]]></scriptCode>
+      </scriptItem>
+    </subMenu>
+  </menuBar>
+</mainMenu>

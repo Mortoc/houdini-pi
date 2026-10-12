@@ -57,3 +57,13 @@ Each entry: decision, options weighed, why. Review in the morning.
     shows "Starting…" and swaps in the web view when `/health` answers.
 14. **Menu moved to Windows ▸ Squatch Studios ▸ Pi** at Mortoc's request (was a
     top-level houdini-pi menu).
+15. **Session naming uses the cheapest *priced* model pi lists** when
+    `naming.model` is `"cheapest"` (default); free (0-cost) and unpriced
+    entries are skipped because they are usually rate-limited or unknown.
+16. **"Can modify the scene" is decided by tool-name prefix** (`get_`, `list_`,
+    `find_`, `capture_`… are reads; everything else on fxhoudini, plus
+    `codemode`, writes). fxhoudinimcp publishes no readOnly annotations to key
+    off; a wrong guess costs one extra backup, never a missing one.
+17. **Node drag-and-drop reads `text/plain`** from the drop and keeps tokens
+    that look like absolute node paths. Houdini's drag payload format is
+    unverified from here; the e2e test covers the page side only.

@@ -35,7 +35,8 @@ export interface PiAgentOptions {
 
 function modelRef(model: Model<any> | undefined): ModelRef | undefined {
   if (model === undefined) return undefined;
-  return { provider: model.provider, id: model.id, name: model.name, reasoning: model.reasoning };
+  const cost = model.cost === undefined ? {} : { cost: { input: model.cost.input, output: model.cost.output } };
+  return { provider: model.provider, id: model.id, name: model.name, reasoning: model.reasoning, ...cost };
 }
 
 function textOf(content: unknown): string {
@@ -108,6 +109,17 @@ export class PiAgent implements AgentLike {
   get model() { return modelRef(this.session.model); }
   get thinkingLevel() { return this.session.thinkingLevel as ThinkingLevel; }
   get isStreaming() { return this.session.isStreaming; }
+  get sessionName() { return this.session.sessionName; }
+  setSessionName(name: string) { this.session.setSessionName(name); }
+
+  async complete(ref: ModelRef, prompt: string): Promise<string> {
+    const model = this.session.modelRuntime.getModel(ref.provider, ref.id);
+    if (model === undefined) throw new Error(`unknown model ${ref.provider}/${ref.id}`);
+    const reply = await this.session.modelRuntime.completeSimple(model, {
+      messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+    });
+    return textOf(reply.content);
+  }
 
   subscribe(listener: (event: AgentEvent) => void) {
     this.listeners.add(listener);
@@ -164,14 +176,11 @@ export class PiAgent implements AgentLike {
     return { cost: this.session.getSessionStats().cost };
   }
 
-  /** One-shot, tool-free completion on the current model; used to condense project memory. */
+  /** Condense project memory on the current model, tool-free. */
   async condense(prompt: string): Promise<string> {
-    const model = this.session.model;
-    if (model === undefined) throw new Error("no model selected");
-    const reply = await this.session.modelRuntime.completeSimple(model, {
-      messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-    });
-    return textOf(reply.content);
+    const current = this.model;
+    if (current === undefined) throw new Error("no model selected");
+    return this.complete(current, prompt);
   }
 
   async dispose() {

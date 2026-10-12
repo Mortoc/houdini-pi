@@ -85,3 +85,29 @@ def _tail(path, lines: int = 20) -> str:
 
 def createInterface():  # noqa: N802  (Houdini's required name)
     return AgentPane()
+
+
+INTERFACE_NAME = "houdini_pi"
+
+
+def open_pane():
+    """Show the Pi pane as a docked tab: reuse an open one, else add a tab beside the Parameter view.
+
+    The pane is a Python Panel interface, so it also appears in every pane's
+    tab-type menu (New Tab ▸ Python Panel ▸ Pi) like the Geometry Spreadsheet.
+    """
+    import hou
+
+    for tab in hou.ui.paneTabs():
+        is_ours = tab.type() == hou.paneTabType.PythonPanel and tab.activeInterface() is not None and tab.activeInterface().name() == INTERFACE_NAME
+        if is_ours:
+            tab.setIsCurrentTab()
+            return tab
+
+    desktop = hou.ui.curDesktop()
+    anchor = desktop.paneTabOfType(hou.paneTabType.Parm) or desktop.paneTabOfType(hou.paneTabType.NetworkEditor)
+    pane = anchor.pane() if anchor is not None else None
+    tab = pane.createTab(hou.paneTabType.PythonPanel) if pane is not None else desktop.createFloatingPaneTab(hou.paneTabType.PythonPanel)
+    tab.setActiveInterface(hou.pypanel.interfaceByName(INTERFACE_NAME))
+    tab.setIsCurrentTab()
+    return tab

@@ -11,6 +11,7 @@ import { houdiniPort } from "./houdini-port.js";
 import { SessionHub, type HoudiniPort } from "./hub.js";
 import { LOOPBACK, startServer } from "./server.js";
 import { SessionIndex } from "./session-index.js";
+import { loadSettings } from "./settings.js";
 import { watchParent } from "./watchdog.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -55,6 +56,7 @@ function fakeHoudini(): HoudiniPort {
 
 export async function main(argv = process.argv.slice(2)) {
   const cli = parseCli(argv);
+  const settings = loadSettings();
   let agent: AgentLike;
   let houdini: HoudiniPort;
   let hub: SessionHub;
@@ -62,7 +64,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (cli.fakeAgent) {
     agent = new FakeAgent();
     houdini = fakeHoudini();
-    hub = new SessionHub(agent, houdini);
+    hub = new SessionHub(agent, houdini, settings);
   } else {
     const bridge = new HoudiniBridge(cli.houdiniPort);
     houdini = houdiniPort(bridge);
@@ -74,7 +76,9 @@ export async function main(argv = process.argv.slice(2)) {
     const extension = createHoudiniExtension({
       bridge,
       houdiniPort: cli.houdiniPort,
-      fileToolsEnabled: () => hubRef?.fileToolsEnabled ?? false,
+      onBackup: (report) => {
+        if ("error" in report) hubRef?.broadcast({ type: "error", message: `backup before the turn failed: ${report.error}` });
+      },
       condense: (prompt) => piAgent!.condense(prompt),
       onCompaction: (report) => {
         if ("error" in report) hubRef?.broadcast({ type: "error", message: `memory compaction failed: ${report.error}` });
@@ -90,7 +94,7 @@ export async function main(argv = process.argv.slice(2)) {
       onExtensionError: (error) => hubRef?.broadcast({ type: "error", message: `extension error: ${String(error)}` }),
     });
     agent = piAgent;
-    hub = new SessionHub(agent, houdini);
+    hub = new SessionHub(agent, houdini, settings);
     hubRef = hub;
     if (hip !== undefined && agent.sessionPath !== undefined) index.set(hip, agent.sessionPath);
     agent.subscribe((event) => {

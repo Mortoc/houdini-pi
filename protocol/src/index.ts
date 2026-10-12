@@ -13,6 +13,8 @@ export interface ModelRef {
   id: string;
   name: string;
   reasoning: boolean;
+  /** USD per million tokens, when the provider publishes it. */
+  cost?: { input: number; output: number };
 }
 
 export interface SessionRef {
@@ -44,7 +46,7 @@ export type ClientMessage =
   | { type: "memory_read" }
   | { type: "memory_edit"; text: string }
   | { type: "undo_compaction" }
-  | { type: "set_file_tools"; enabled: boolean }
+  | { type: "rename_session"; name: string }
   | { type: "undo_turn" };
 
 export interface HelloState {
@@ -53,13 +55,14 @@ export interface HelloState {
   model: ModelRef | undefined;
   thinkingLevel: ThinkingLevel;
   hip: string | undefined;
-  fileTools: boolean;
+  sessionName: string | undefined;
   isStreaming: boolean;
 }
 
 export type ServerMessage =
   | ({ type: "hello" } & HelloState)
-  | { type: "state"; model: ModelRef | undefined; thinkingLevel: ThinkingLevel; isStreaming: boolean; fileTools: boolean }
+  | { type: "state"; model: ModelRef | undefined; thinkingLevel: ThinkingLevel; isStreaming: boolean }
+  | { type: "session_name"; name: string | undefined }
   | { type: "user_message"; text: string }
   | { type: "text_delta"; delta: string }
   | { type: "thinking_delta"; delta: string }
@@ -96,13 +99,14 @@ const CLIENT_TYPES: Record<ClientMessage["type"], readonly string[]> = {
   memory_read: [],
   memory_edit: ["text"],
   undo_compaction: [],
-  set_file_tools: ["enabled"],
+  rename_session: ["name"],
   undo_turn: [],
 };
 
 const SERVER_TYPES: Record<ServerMessage["type"], readonly string[]> = {
-  hello: ["sessionId", "thinkingLevel", "fileTools", "isStreaming"],
-  state: ["thinkingLevel", "isStreaming", "fileTools"],
+  hello: ["sessionId", "thinkingLevel", "isStreaming"],
+  state: ["thinkingLevel", "isStreaming"],
+  session_name: [],
   user_message: ["text"],
   text_delta: ["delta"],
   thinking_delta: ["delta"],

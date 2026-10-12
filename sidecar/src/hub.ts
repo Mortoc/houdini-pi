@@ -2,6 +2,8 @@ import { type ClientMessage, type ServerMessage, decodeClient, encode, ProtocolE
 import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
+import { DEFAULT_SESSION_NAME, SessionNamer } from "./namer.js";
+import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
 export interface HoudiniPort {
@@ -21,18 +23,16 @@ export interface SocketLike {
 /** One agent, many panes: every attached socket sees the same stream. */
 export class SessionHub {
   private sockets = new Set<SocketLike>();
-  fileTools = false;
   private promptStartedAt: number | undefined;
+  private readonly namer: SessionNamer;
 
   constructor(
     private readonly agent: AgentLike,
     private readonly houdini: HoudiniPort,
+    settings: Settings = DEFAULT_SETTINGS,
   ) {
+    this.namer = new SessionNamer(agent, settings.naming);
     agent.subscribe((event) => this.onAgentEvent(event));
-  }
-
-  get fileToolsEnabled(): boolean {
-    return this.fileTools;
   }
 
   attach(socket: SocketLike | WebSocket) {
@@ -56,14 +56,14 @@ export class SessionHub {
       model: this.agent.model,
       thinkingLevel: this.agent.thinkingLevel,
       hip,
-      fileTools: this.fileTools,
+      sessionName: this.agent.sessionName ?? DEFAULT_SESSION_NAME,
       isStreaming: this.agent.isStreaming,
     });
     this.sendTo(socket, { type: "history", messages: this.agent.getHistory() });
   }
 
   private state(): ServerMessage {
-    return { type: "state", model: this.agent.model, thinkingLevel: this.agent.thinkingLevel, isStreaming: this.agent.isStreaming, fileTools: this.fileTools };
+    return { type: "state", model: this.agent.model, thinkingLevel: this.agent.thinkingLevel, isStreaming: this.agent.isStreaming };
   }
 
   broadcast(message: ServerMessage) {
@@ -110,6 +110,14 @@ export class SessionHub {
         this.promptStartedAt = undefined;
         this.broadcast({ type: "settled", aborted: event.aborted, cost: this.agent.getStats().cost, durationMs });
         this.broadcast(this.state());
+        if (!event.aborted) {
+          this.namer
+            .maybeRename()
+            .then((name) => {
+              if (name !== undefined) this.broadcast({ type: "session_name", name });
+            })
+            .catch((error) => this.broadcast({ type: "error", message: `could not name the session: ${(error as Error).message}` }));
+        }
         return;
       }
       case "model_changed":
@@ -191,9 +199,9 @@ export class SessionHub {
         await this.houdini.memoryRollback();
         this.broadcast({ type: "memory", ...(await this.houdini.memoryRead()) });
         return;
-      case "set_file_tools":
-        this.fileTools = message.enabled;
-        this.broadcast(this.state());
+      case "rename_session":
+        this.agent.setSessionName(message.name);
+        this.broadcast({ type: "session_name", name: message.name });
         return;
       case "undo_turn":
         await this.houdini.undoTurn();

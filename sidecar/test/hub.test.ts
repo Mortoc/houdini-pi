@@ -46,7 +46,7 @@ describe("SessionHub", () => {
     hub.attach(socket);
     await settle();
     expect(socket.types()).toEqual(["hello", "history"]);
-    expect(socket.received[0]).toMatchObject({ hip: "/scenes/test.hip", fileTools: false, model: { id: "fake-fast" } });
+    expect(socket.received[0]).toMatchObject({ hip: "/scenes/test.hip", sessionName: "New Conversation", model: { id: "fake-fast" } });
   });
 
   it("streams one prompt to every attached pane in order", async () => {
@@ -60,7 +60,7 @@ describe("SessionHub", () => {
     a.emit("message", encode({ type: "prompt", text: "thinner wires" }));
     await a.waitFor("settled");
     await b.waitFor("settled");
-    const types = a.types().filter((t) => t !== "hello" && t !== "history");
+    const types = a.types().filter((t) => t !== "hello" && t !== "history" && t !== "session_name");
     expect(types[0]).toBe("user_message");
     expect(types).toContain("thinking_delta");
     expect(types.indexOf("tool_start")).toBeLessThan(types.indexOf("tool_end"));
@@ -71,7 +71,7 @@ describe("SessionHub", () => {
     expect(b.types().filter((t) => t === "text_delta").length).toBe(a.types().filter((t) => t === "text_delta").length);
     const settled = a.received.find((m) => m.type === "settled");
     expect(settled).toMatchObject({ aborted: false, cost: expect.any(Number) });
-    expect(agent.calls).toEqual(["prompt:thinner wires"]);
+    expect(agent.calls[0]).toBe("prompt:thinner wires");
   });
 
   it("aborts mid-stream and reports it", async () => {
@@ -88,7 +88,7 @@ describe("SessionHub", () => {
     expect(socket.types()).not.toContain("message_end");
   });
 
-  it("forwards model, thinking and file-tool changes as state", async () => {
+  it("forwards model and thinking changes as state, and manual renames", async () => {
     const agent = new FakeAgent(0);
     const hub = new SessionHub(agent, fakeHoudini());
     const socket = new FakeSocket();
@@ -96,14 +96,32 @@ describe("SessionHub", () => {
     await settle();
     socket.emit("message", encode({ type: "set_model", provider: "fake", modelId: "fake-deep" }));
     socket.emit("message", encode({ type: "set_thinking", level: "high" }));
-    socket.emit("message", encode({ type: "set_file_tools", enabled: true }));
+    socket.emit("message", encode({ type: "rename_session", name: "Wires" }));
     socket.emit("message", encode({ type: "list_models" }));
     await socket.waitFor("models");
     await settle();
     const last = socket.received.filter((m) => m.type === "state").at(-1);
-    expect(last).toMatchObject({ model: { id: "fake-deep" }, thinkingLevel: "high", fileTools: true });
-    expect(hub.fileToolsEnabled).toBe(true);
+    expect(last).toMatchObject({ model: { id: "fake-deep" }, thinkingLevel: "high" });
+    expect(socket.received.find((m) => m.type === "session_name")).toMatchObject({ name: "Wires" });
     expect(agent.calls).toContain("setModel:fake/fake-deep");
+    expect(agent.sessionName).toBe("Wires");
+  });
+
+  it("names the session with the cheapest model after the first user message", async () => {
+    const agent = new FakeAgent(0);
+    const hub = new SessionHub(agent, fakeHoudini());
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "prompt", text: "spawn an env light" }));
+    await socket.waitFor("session_name");
+    expect(socket.received.find((m) => m.type === "session_name")).toMatchObject({ name: expect.stringContaining("Named:") });
+    expect(agent.calls).toContain("complete:fake-nano");
+    agent.calls.length = 0;
+    socket.emit("message", encode({ type: "prompt", text: "second" }));
+    await socket.waitFor("settled");
+    await settle();
+    expect(agent.calls.filter((c) => c.startsWith("complete:"))).toEqual([]);
   });
 
   it("edits and rolls back memory through the Houdini port", async () => {

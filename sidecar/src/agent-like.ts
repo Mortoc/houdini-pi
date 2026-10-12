@@ -30,6 +30,10 @@ export interface AgentLike {
   readonly model: ModelRef | undefined;
   readonly thinkingLevel: ThinkingLevel;
   readonly isStreaming: boolean;
+  readonly sessionName: string | undefined;
+  setSessionName(name: string): void;
+  /** One-shot, tool-free completion on `model`; used for naming and memory compaction. */
+  complete(model: ModelRef, prompt: string): Promise<string>;
   /** Survives session replacement: the adapter re-subscribes on the new session. */
   subscribe(listener: (event: AgentEvent) => void): () => void;
   prompt(text: string, images?: { mimeType: string; data: string }[]): Promise<void>;

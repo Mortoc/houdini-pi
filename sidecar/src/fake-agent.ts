@@ -6,6 +6,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export const FAKE_MODELS: ModelRef[] = [
   { provider: "fake", id: "fake-fast", name: "Fake Fast", reasoning: false },
   { provider: "fake", id: "fake-deep", name: "Fake Deep", reasoning: true },
+  { provider: "fake", id: "fake-nano", name: "Fake Nano", reasoning: false, cost: { input: 0.01, output: 0.02 } },
 ];
 
 /** Canned agent for UI work and tests: every prompt streams the same turn. */
@@ -15,6 +16,7 @@ export class FakeAgent implements AgentLike {
   model: ModelRef | undefined = FAKE_MODELS[0];
   thinkingLevel: ThinkingLevel = "medium";
   isStreaming = false;
+  sessionName: string | undefined = undefined;
   private listeners = new Set<(event: AgentEvent) => void>();
   private history: HistoryMessage[] = [];
   private aborted = false;
@@ -51,6 +53,8 @@ export class FakeAgent implements AgentLike {
         { type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "Looking at the selected nodes…" } },
         { type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", args: { node_path: "/obj/geo1/wire1", parm_name: "radius", value: 0.01 } },
         { type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", result: { ok: true }, isError: false, durationMs: 12 },
+        { type: "tool_execution_start", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", args: { code: "import hou\n# thin every wire\nfor node in hou.node('/obj/geo1').children():\n    if node.type().name() == 'wire':\n        node.parm('radius').set(0.01)\nprint('done')" } },
+        { type: "tool_execution_end", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", result: { success: true, stdout: "done" }, isError: false, durationMs: 40 },
         ...reply.split(" ").map((word): AgentEvent => ({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: `${word} ` } })),
         { type: "message_end", message: { role: "assistant", text: reply } },
         { type: "turn_end", turnIndex: this.turns++ },
@@ -65,6 +69,8 @@ export class FakeAgent implements AgentLike {
     await run();
   }
 
+  setSessionName(name: string) { this.calls.push(`name:${name}`); this.sessionName = name; }
+  async complete(model: ModelRef, prompt: string) { this.calls.push(`complete:${model.id}`); return `Named: ${prompt.split("\n").at(-1)?.slice(0, 24) ?? ""}`; }
   async steer(text: string) { this.calls.push(`steer:${text}`); }
   async followUp(text: string) { this.calls.push(`followUp:${text}`); }
   async abort() { this.calls.push("abort"); this.aborted = true; }
@@ -77,7 +83,7 @@ export class FakeAgent implements AgentLike {
   }
   setThinkingLevel(level: ThinkingLevel) { this.calls.push(`thinking:${level}`); this.thinkingLevel = level; this.emit({ type: "model_changed" }); }
   async getAvailableModels() { return FAKE_MODELS; }
-  async newSession() { this.calls.push("newSession"); this.sessionId = `fake-session-${Date.now()}`; this.history = []; }
+  async newSession() { this.calls.push("newSession"); this.sessionId = `fake-session-${Date.now()}`; this.history = []; this.sessionName = undefined; this.turns = 0; }
   async switchSession(sessionPath: string) { this.calls.push(`switch:${sessionPath}`); this.sessionPath = sessionPath; }
   async fork(entryId: string) { this.calls.push(`fork:${entryId}`); }
   async listSessions(): Promise<SessionRef[]> {

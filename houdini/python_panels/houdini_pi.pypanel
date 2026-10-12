@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <pythonPanelDocument>
-  <interface name="houdini_pi" label="houdini-pi Agent" icon="MISC_python" showNetworkNavigationBar="false" help_url="https://github.com/Mortoc/houdini-pi">
+  <interface name="houdini_pi" label="Pi" icon="MISC_python" showNetworkNavigationBar="false" help_url="https://github.com/Mortoc/houdini-pi">
     <script><![CDATA[
 import houdini_pi.panel
 
 def createInterface():
     return houdini_pi.panel.createInterface()
 ]]></script>
-    <includeInToolbarMenu menu_position="200" create_separator="false"/>
+    <includeInPaneTabMenu menu_position="300" create_separator="true"/>
+    <includeInToolbarMenu menu_position="300" create_separator="false"/>
     <help><![CDATA[Chat with an LLM that edits this scene. https://github.com/Mortoc/houdini-pi]]></help>
   </interface>
 </pythonPanelDocument>

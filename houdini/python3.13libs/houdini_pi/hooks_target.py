@@ -98,3 +98,12 @@ def memory_write(text: str, prev: str | None) -> dict[str, Any]:
     elif root.userData(MEMORY_PREV_KEY) is not None:
         root.destroyUserData(MEMORY_PREV_KEY)
     return {"chars": len(text), "prev": bool(prev)}
+
+
+def backup_scene() -> dict[str, Any]:
+    """Write a Houdini backup (hou.hipFile.saveAsBackup) so a turn can be recovered beyond undo."""
+    hou = _h()
+    is_untitled = hou.hipFile.basename() == "untitled.hip" and not hou.hipFile.hasUnsavedChanges()
+    if is_untitled:
+        return {"skipped": "untitled scene"}
+    return {"path": hou.hipFile.saveAsBackup()}

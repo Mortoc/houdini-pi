@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contextBlock, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
+import { canModifyScene, contextBlock, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
 
 type Handler = (event: any, ctx: any) => any;
 
@@ -30,6 +30,7 @@ const scene: SceneContext = { hip: "/scenes/rock.hip", current_network: "/obj/ge
 class FakeBridge implements HoudiniExtensionBridge {
   calls: { name: string; kwargs: Record<string, unknown> }[] = [];
   executed: string[] = [];
+  backups = 0;
   memory = "## Conventions\n\n- metres\n";
   prev: string | null = null;
   up = true;
@@ -44,6 +45,7 @@ class FakeBridge implements HoudiniExtensionBridge {
       case "memory_write": this.memory = kwargs["text"] as string; this.prev = kwargs["prev"] as string | null; return undefined as T;
       case "begin_turn": if (this.failBeginTurn) throw new Error("hou exploded"); return undefined as T;
       case "end_turn": return undefined as T;
+      case "backup_scene": this.backups++; return { path: `/bak/${this.backups}.hip` } as T;
     }
     throw new Error(`unexpected helper ${name}`);
   }
@@ -113,12 +115,41 @@ describe("houdini extension", () => {
     let enabled = false;
     const pi = load(new FakeBridge(), { fileToolsEnabled: () => enabled });
     const [blocked] = await pi.fire("tool_call", { toolName: "bash", toolCallId: "1", input: {} });
-    expect(blocked).toMatchObject({ block: true, reason: expect.stringContaining("enable file tools") });
+    expect(blocked).toMatchObject({ block: true, reason: expect.stringContaining("Houdini tools") });
     const [houdini] = await pi.fire("tool_call", { toolName: "mcp__fxhoudini__set_parameter", toolCallId: "2", input: {} });
     expect(houdini).toBeUndefined();
     enabled = true;
     const [allowed] = await pi.fire("tool_call", { toolName: "edit", toolCallId: "3", input: {} });
     expect(allowed).toBeUndefined();
+  });
+
+  it("knows which tools can change the scene", () => {
+    expect(canModifyScene("mcp__fxhoudini__get_scene_info")).toBe(false);
+    expect(canModifyScene("mcp__fxhoudini__capture_screenshot")).toBe(false);
+    expect(canModifyScene("mcp__fxhoudini__set_parameter")).toBe(true);
+    expect(canModifyScene("mcp__fxhoudini__create_node")).toBe(true);
+    expect(canModifyScene("mcp__fxhoudini__execute_python")).toBe(true);
+    expect(canModifyScene("codemode")).toBe(true);
+    expect(canModifyScene("memory_append")).toBe(false);
+    expect(canModifyScene("read")).toBe(false);
+    expect(canModifyScene("bash")).toBe(true);
+  });
+
+  it("backs the scene up once per turn, before the first modifying tool call", async () => {
+    const bridge = new FakeBridge();
+    const reports: unknown[] = [];
+    const pi = load(bridge, { onBackup: (r) => reports.push(r) });
+    await pi.fire("before_agent_start", { prompt: "x", systemPromptOptions: {} });
+    await pi.fire("tool_call", { toolName: "mcp__fxhoudini__get_scene_info", toolCallId: "1", input: {} });
+    expect(bridge.backups).toBe(0);
+    await pi.fire("tool_call", { toolName: "mcp__fxhoudini__create_node", toolCallId: "2", input: {} });
+    await pi.fire("tool_call", { toolName: "mcp__fxhoudini__set_parameter", toolCallId: "3", input: {} });
+    expect(bridge.backups).toBe(1);
+    expect(reports).toEqual([{ path: "/bak/1.hip" }]);
+    await pi.fire("agent_settled", { aborted: false });
+    await pi.fire("before_agent_start", { prompt: "y", systemPromptOptions: {} });
+    await pi.fire("tool_call", { toolName: "mcp__fxhoudini__delete_node", toolCallId: "4", input: {} });
+    expect(bridge.backups).toBe(2);
   });
 
   it("exposes memory tools that write through the bridge", async () => {

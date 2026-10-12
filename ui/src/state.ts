@@ -19,7 +19,7 @@ export interface PaneState {
   model: ModelRef | undefined;
   thinkingLevel: ThinkingLevel;
   isStreaming: boolean;
-  fileTools: boolean;
+  sessionName: string;
   entries: Entry[];
   models: ModelRef[];
   sessions: SessionRef[];
@@ -33,7 +33,7 @@ export const initialState: PaneState = {
   model: undefined,
   thinkingLevel: "medium",
   isStreaming: false,
-  fileTools: false,
+  sessionName: "New Conversation",
   entries: [],
   models: [],
   sessions: [],
@@ -61,7 +61,7 @@ export function reduce(state: PaneState, message: ServerMessage): PaneState {
   switch (message.type) {
     case "hello": {
       const { type: _type, ...hello } = message;
-      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, fileTools: hello.fileTools, entries: [] };
+      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, sessionName: hello.sessionName ?? "New Conversation", entries: [], lastTurn: undefined };
     }
     case "history":
       return {
@@ -71,7 +71,9 @@ export function reduce(state: PaneState, message: ServerMessage): PaneState {
         ),
       };
     case "state":
-      return { ...state, model: message.model, thinkingLevel: message.thinkingLevel, isStreaming: message.isStreaming, fileTools: message.fileTools };
+      return { ...state, model: message.model, thinkingLevel: message.thinkingLevel, isStreaming: message.isStreaming };
+    case "session_name":
+      return { ...state, sessionName: message.name ?? "New Conversation" };
     case "user_message":
       return { ...state, isStreaming: true, entries: [...state.entries, { kind: "user", id: nextId++, text: message.text }] };
     case "text_delta":

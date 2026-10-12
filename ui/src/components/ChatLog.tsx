@@ -7,10 +7,11 @@ import { ToolCard } from "./ToolCard.js";
 interface Props {
   entries: Entry[];
   lastTurn: PaneState["lastTurn"];
+  streaming: boolean;
   send: (message: ClientMessage) => void;
 }
 
-export function ChatLog({ entries, lastTurn, send }: Props) {
+export function ChatLog({ entries, lastTurn, streaming, send }: Props) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
@@ -30,11 +31,11 @@ export function ChatLog({ entries, lastTurn, send }: Props) {
           );
         return (
           <div key={entry.id} className={`bubble assistant${entry.streaming ? " streaming" : ""}`} data-testid="assistant-bubble">
-            {entry.thinking.length > 0 && (
-              <details className="thinking" data-testid="thinking">
-                <summary>thinking</summary>
-                <pre>{entry.thinking}</pre>
-              </details>
+            {entry.streaming && streaming && (
+              <div className="thinking" data-testid="thinking">
+                <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+                <span className="thinking-text">{entry.thinking.length > 0 ? lastLine(entry.thinking) : "thinking"}</span>
+              </div>
             )}
             {entry.tools.map((tool) => <ToolCard key={tool.toolCallId} tool={tool} />)}
             <Markdown text={entry.text} />
@@ -50,4 +51,9 @@ export function ChatLog({ entries, lastTurn, send }: Props) {
       <div ref={end} />
     </main>
   );
+}
+
+function lastLine(text: string): string {
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  return (lines.at(-1) ?? "").slice(-160);
 }

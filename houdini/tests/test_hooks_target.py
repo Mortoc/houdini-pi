@@ -50,3 +50,9 @@ def test_memory_round_trips_through_root_user_data(hou):
     assert hooks_target.memory_read() == {"text": "condensed", "prev": "# Memory\n- metres\n"}
     hooks_target.memory_write("# Memory\n- metres\n", None)
     assert hooks_target.MEMORY_PREV_KEY not in hou.root.user_data
+
+
+def test_backup_writes_a_houdini_backup_unless_untitled(hou):
+    assert hooks_target.backup_scene() == {"path": "/scenes/backup/rock_bak1.hip"}
+    hou.hipFile = FakeHipFile("/tmp/untitled.hip", "untitled.hip", unsaved=False)
+    assert hooks_target.backup_scene() == {"skipped": "untitled scene"}

@@ -8,10 +8,8 @@
         <scriptItem id="houdini_pi_open">
           <label>Pi</label>
           <scriptCode><![CDATA[
-import hou
-desktop = hou.ui.curDesktop()
-panel = desktop.createFloatingPaneTab(hou.paneTabType.PythonPanel)
-panel.setActiveInterface(hou.pypanel.interfaceByName("houdini_pi"))
+import houdini_pi.panel
+houdini_pi.panel.open_pane()
 ]]></scriptCode>
         </scriptItem>
       </subMenu>

@@ -18,13 +18,14 @@ const clientMessages: ClientMessage[] = [
   { type: "memory_read" },
   { type: "memory_edit", text: "# memo" },
   { type: "undo_compaction" },
-  { type: "set_file_tools", enabled: true },
+  { type: "rename_session", name: "Env light" },
   { type: "undo_turn" },
 ];
 
 const serverMessages: ServerMessage[] = [
-  { type: "hello", sessionId: "s", sessionPath: undefined, model: undefined, thinkingLevel: "off", hip: undefined, fileTools: false, isStreaming: false },
-  { type: "state", model: undefined, thinkingLevel: "low", isStreaming: true, fileTools: false },
+  { type: "hello", sessionId: "s", sessionPath: undefined, model: undefined, thinkingLevel: "off", hip: undefined, sessionName: undefined, isStreaming: false },
+  { type: "state", model: undefined, thinkingLevel: "low", isStreaming: true },
+  { type: "session_name", name: "Env light" },
   { type: "user_message", text: "hi" },
   { type: "text_delta", delta: "a" },
   { type: "thinking_delta", delta: "b" },

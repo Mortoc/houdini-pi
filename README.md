@@ -34,15 +34,25 @@ cd ~/houdini-pi && ./install
 
 `./install` checks the dependencies above, runs `npm ci && npm run build`, and
 writes `$HOUDINI_USER_PREF_DIR/packages/houdini_pi.json`. `./install --uninstall`
-removes that file. Then in Houdini: **houdini-pi ▸ Open Agent Pane**.
+removes that file. Then in Houdini: **Windows ▸ Squatch Studios ▸ Pi**, or add a **Pi** tab to
+any pane (New Tab ▸ Python Panel ▸ Pi) like the Geometry Spreadsheet.
 
 NixOS: `nix build .#houdini-pi` builds the plugin; `.#houdini-pi-package-json`
 is the package file pointing at it, for a home-manager `home.file` entry.
 
 ## Using the pane
 
-- **Model and thinking level** pickers in the toolbar use whatever pi has
-  credentials for. Auth is pi's, never stored here.
+- **Model picker**: type to search, arrows and Enter to pick. It lists
+  whatever pi has credentials for; auth is pi's, never stored here.
+- **Conversation name**: starts as "New Conversation"; the cheapest priced
+  model names it after your first message and again at your fifth. Configure
+  in `~/.houdini-pi/settings.json`:
+  `{"naming": {"model": "cheapest" | "provider/model-id", "renameAtUserMessages": [1, 5]}}`.
+- **Backup before the agent edits**: once per turn, before the first tool call
+  that can change the scene, a Houdini backup is written
+  (`hou.hipFile.saveAsBackup`, into `$HOUDINI_BACKUP_DIR`).
+- **Reference nodes**: drag nodes from the network editor onto the pane; they
+  become chips that ride along with your next message.
 - **Each turn is one Ctrl-Z** in Houdini. The footer also offers "undo this
   turn".
 - **Memory tab**: markdown stored in the `.hip` (root node user data), shown to
@@ -51,8 +61,8 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   ~16k tokens, with one-step rollback.
 - **Sessions tab**: conversations for this hip. Reopening a hip resumes its
   last session.
-- **file tools**: pi's `bash`, `edit`, `write` are off by default. The toolbar
-  checkbox enables them for this session.
+- pi's own file tools (`bash`, `edit`, `write`) are off: the agent works on
+  the scene through Houdini. `HOUDINI_PI_FILE_TOOLS=1` enables them in the CLI.
 
 ## From the terminal
 

@@ -29,6 +29,8 @@ export interface HoudiniExtensionOptions {
   houdiniPort: number;
   /** Whether pi's file tools (bash, edit, write) may run this turn. Default: never. */
   fileToolsEnabled?: () => boolean;
+  /** Reports the autosave backup taken before the first modifying tool call of a turn, or its failure. */
+  onBackup?: (report: { path: string } | { skipped: string } | { error: string }) => void;
   /** One-shot condense call for memory compaction. Omit to disable compaction. */
   condense?: (prompt: string, ctx: ExtensionContext) => Promise<string>;
   /** Reports compaction results and failures to the host (the pane, or the terminal). */
@@ -40,6 +42,18 @@ export interface HoudiniExtensionOptions {
 }
 
 export const FILE_TOOLS = ["bash", "powershell", "edit", "write"] as const;
+
+const READ_ONLY_PREFIXES = ["get_", "list_", "find_", "search_", "explain_", "capture_", "inspect_", "compare_", "sample_", "validate_", "evaluate_", "describe_", "verify_", "render_", "memory_read"];
+
+/** Whether a tool can change the scene. Reads are named for what they return; everything else is assumed to write. */
+export function canModifyScene(toolName: string): boolean {
+  const bare = toolName.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
+  const is_houdini = toolName.startsWith("mcp__fxhoudini__");
+  const is_memory = toolName.startsWith("memory_");
+  const is_read = READ_ONLY_PREFIXES.some((prefix) => bare.startsWith(prefix));
+  const is_codemode = toolName === "codemode";
+  return (is_houdini && !is_read) || is_codemode || (!is_memory && !is_houdini && !is_read && (FILE_TOOLS as readonly string[]).includes(toolName));
+}
 
 export const FXHOUDINIMCP_REF = "git+https://github.com/healkeiser/fxhoudinimcp@v2.25.0";
 
@@ -115,6 +129,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   const compactor = options.condense === undefined ? undefined : new Compactor({ condense: (prompt) => options.condense!(prompt, currentCtx!) });
   let currentCtx: ExtensionContext | undefined;
   let turnOpen = false;
+  let backedUpThisTurn = false;
 
   const endTurn = async () => {
     if (!turnOpen) return;
@@ -132,13 +147,26 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       const [scene, memoryText] = await Promise.all([bridge.runHelper<SceneContext>("scene_context"), memory.read()]);
       await bridge.runHelper("begin_turn", { label: `houdini-pi: ${event.prompt.slice(0, 60)}` });
       turnOpen = true;
+      backedUpThisTurn = false;
       return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText), display: false } };
     });
 
-    pi.on("tool_call", (event) => {
+    pi.on("tool_call", async (event) => {
       const is_file_tool = (FILE_TOOLS as readonly string[]).includes(event.toolName);
       if (is_file_tool && !fileToolsEnabled()) {
-        return { block: true, reason: `${event.toolName} is off in houdini-pi; work on the scene through the Houdini tools, or enable file tools in the pane.` };
+        return { block: true, reason: `${event.toolName} is off in houdini-pi; work on the scene through the Houdini tools.` };
+      }
+      const needs_backup = !backedUpThisTurn && canModifyScene(event.toolName);
+      if (needs_backup) {
+        // Once per turn, before the first call that can touch the scene: a
+        // Houdini autosave backup the artist can fall back to beyond undo.
+        backedUpThisTurn = true;
+        try {
+          const report = await bridge.runHelper<{ path: string } | { skipped: string }>("backup_scene");
+          options.onBackup?.(report);
+        } catch (error) {
+          options.onBackup?.({ error: (error as Error).message });
+        }
       }
       return undefined;
     });

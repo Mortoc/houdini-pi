@@ -69,6 +69,10 @@ class FakeHipFile:
     def hasUnsavedChanges(self) -> bool:  # noqa: N802
         return self._unsaved
 
+    def saveAsBackup(self) -> str:  # noqa: N802
+        self.backups = getattr(self, "backups", 0) + 1
+        return f"/scenes/backup/rock_bak{self.backups}.hip"
+
 
 class FakeHou:
     def __init__(self):

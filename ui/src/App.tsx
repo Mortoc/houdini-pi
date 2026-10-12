@@ -42,6 +42,20 @@ export function App() {
     [],
   );
 
+  // Houdini's own drags (parms, channels) never reach the DOM; the pane's Qt
+  // side decodes them and calls this with the paths.
+  useEffect(() => {
+    const w = window as Window & { houdiniPiDrop?: (paths: string[]) => void };
+    w.houdiniPiDrop = (paths) => {
+      if (!Array.isArray(paths) || paths.length === 0) return;
+      setTab("chat");
+      setDroppedNodes((current) => [...current, ...paths.filter((p) => typeof p === "string" && !current.includes(p))]);
+    };
+    return () => {
+      delete w.houdiniPiDrop;
+    };
+  }, []);
+
   const openTab = (next: Tab) => {
     setTab(next);
     if (next === "sessions") send({ type: "list_sessions" });

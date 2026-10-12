@@ -180,6 +180,10 @@ test("dropped node and parameter paths become chips and ride along with the prom
     }),
   });
   await expect(page.getByTestId("node-chips").locator(".chip")).toHaveCount(2);
+  await page.evaluate(() => (window as unknown as { houdiniPiDrop: (p: string[]) => void }).houdiniPiDrop(["/obj/geo1/wire1/radius"]));
+  await expect(page.getByTestId("node-chips").locator(".chip")).toHaveCount(3);
+  await page.getByTestId("node-chips").locator(".chip-remove").last().click();
+  await expect(page.getByTestId("node-chips").locator(".chip")).toHaveCount(2);
   await page.getByTestId("prompt").fill("make these red");
   await page.getByTestId("send").click();
   await expect(page.getByTestId("user-bubble")).toContainText("Refs: `/obj/geo1/wire1`, `/obj/envlight1`");

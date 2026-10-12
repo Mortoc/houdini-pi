@@ -10,9 +10,11 @@ from __future__ import annotations
 import os
 import traceback
 
+import json
+
 from PySide6 import QtCore, QtWidgets
 
-from houdini_pi import sidecar
+from houdini_pi import drops, sidecar
 
 BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
 POLL_MS = 250
@@ -67,9 +69,50 @@ class AgentPane(QtWidgets.QStackedWidget):
             self._fail("This Houdini's PySide6 has no QtWebEngineWidgets; houdini-pi needs it.")
             return
         view = QtWebEngineWidgets.QWebEngineView()
+        self._drops = DropForwarder(view)
         view.setUrl(QtCore.QUrl(url))
         self.addWidget(view)
         self.setCurrentWidget(view)
+
+
+class DropForwarder(QtCore.QObject):
+    """Hand Houdini's own drags (nodes, parms, channels) to the page.
+
+    Houdini drags carry SideFX mime types and no text, so the page's DOM drop
+    sees nothing. The web view's render widget gets the Qt events; this filter
+    sits on it, accepts Houdini drags, and calls window.houdiniPiDrop(paths).
+    """
+
+    def __init__(self, view):
+        super().__init__(view)
+        self._view = view
+        view.installEventFilter(self)
+        view.loadFinished.connect(self._watch_render_widget)
+        self._watch_render_widget()
+
+    def _watch_render_widget(self, *_):
+        proxy = self._view.focusProxy()
+        if proxy is not None:
+            proxy.installEventFilter(self)
+        for child in self._view.findChildren(QtWidgets.QWidget):
+            child.installEventFilter(self)
+
+    def eventFilter(self, watched, event):  # noqa: N802
+        kind = event.type()
+        is_drag = kind in (QtCore.QEvent.DragEnter, QtCore.QEvent.DragMove, QtCore.QEvent.Drop)
+        if not is_drag:
+            return False
+        mime = event.mimeData()
+        if not drops.is_houdini_drag(list(mime.formats())):
+            return False
+        if kind != QtCore.QEvent.Drop:
+            event.acceptProposedAction()
+            return True
+        payload = {fmt: bytes(mime.data(fmt).data()) for fmt in mime.formats() if fmt in drops.HOUDINI_PATH_TYPES}
+        paths = drops.paths_from_mime(payload)
+        event.acceptProposedAction()
+        self._view.page().runJavaScript(f"window.houdiniPiDrop && window.houdiniPiDrop({json.dumps(paths)})")
+        return True
 
     def _fail(self, text: str):
         self._label.setText(text)

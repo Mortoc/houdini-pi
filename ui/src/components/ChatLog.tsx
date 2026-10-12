@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { ClientMessage } from "@houdini-pi/protocol";
 import type { Entry, PaneState } from "../state.js";
 import { CopyButton } from "./CopyButton.js";
 import { Markdown } from "./Markdown.js";
@@ -8,12 +7,12 @@ import { ToolCard } from "./ToolCard.js";
 interface Props {
   entries: Entry[];
   lastTurn: PaneState["lastTurn"];
-  send: (message: ClientMessage) => void;
+  onUndoTurn: () => void;
 }
 
 const STICKY_PX = 48;
 
-export function ChatLog({ entries, lastTurn, send }: Props) {
+export function ChatLog({ entries, lastTurn, onUndoTurn }: Props) {
   const log = useRef<HTMLElement>(null);
   const [stuck, setStuck] = useState(true);
 
@@ -61,7 +60,11 @@ export function ChatLog({ entries, lastTurn, send }: Props) {
         <footer className={`turn-footer ${lastTurn.aborted ? "aborted" : lastTurn.errors > 0 ? "with-errors" : "ok"}`} data-testid="turn-footer">
           <span className="verdict">{lastTurn.aborted ? "Aborted" : lastTurn.errors > 0 ? `Done, ${lastTurn.errors} tool error${lastTurn.errors === 1 ? "" : "s"}` : "✓ Done"}</span>
           <span className="meta">{(lastTurn.durationMs / 1000).toFixed(1)}s · ${lastTurn.cost.toFixed(4)}</span>
-          <button className="link" onClick={() => send({ type: "undo_turn" })}>undo this turn in Houdini</button>
+          {lastTurn.aborted && (
+            <button className="undo-turn" data-testid="undo-turn" onClick={onUndoTurn} title="Revert everything this turn did in Houdini and put your message back in the box">
+              ↶ Undo
+            </button>
+          )}
         </footer>
       )}
       {!stuck && (

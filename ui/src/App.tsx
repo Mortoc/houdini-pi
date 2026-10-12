@@ -16,6 +16,7 @@ export function App() {
   const [status, setStatus] = useState<Status>("connecting");
   const [tab, setTab] = useState<Tab>("chat");
   const [droppedNodes, setDroppedNodes] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
   const socketRef = useRef<PaneSocket | undefined>(undefined);
 
   useEffect(() => {
@@ -63,9 +64,20 @@ export function App() {
       <Toolbar state={state} status={status} send={send} tab={tab} onTab={openTab} />
       {tab === "chat" && (
         <>
-          <ChatLog entries={state.entries} lastTurn={state.lastTurn} send={send} />
-          <ActivityBar activity={state.activity} streaming={state.isStreaming} />
-          <PromptBox streaming={state.isStreaming} connected={status === "open"} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} />
+          <ChatLog
+            entries={state.entries}
+            lastTurn={state.lastTurn}
+            onUndoTurn={() => {
+              // Revert the whole turn in Houdini (it is one undo group), drop it
+              // from the log, and hand the message back to the artist to edit.
+              send({ type: "undo_turn" });
+              const lastUser = [...state.entries].reverse().find((e) => e.kind === "user");
+              if (lastUser?.kind === "user") setDraft(lastUser.text);
+              dispatch({ type: "drop_last_turn" });
+            }}
+          />
+          <ActivityBar activity={state.activity} streaming={state.isStreaming} onStop={() => send({ type: "abort" })} />
+          <PromptBox streaming={state.isStreaming} connected={status === "open"} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} draft={draft} onDraftChange={setDraft} />
         </>
       )}
       {tab === "memory" && <MemoryTab memory={state.memory} compaction={state.compaction} send={send} />}

@@ -7,7 +7,7 @@ const THROTTLE_MS = 500;
  * Shown while streaming, gone when the turn settles. The text updates at most
  * twice a second so it reads as a status, not a blur.
  */
-export function ActivityBar({ activity, streaming }: { activity: string | undefined; streaming: boolean }) {
+export function ActivityBar({ activity, streaming, onStop }: { activity: string | undefined; streaming: boolean; onStop: () => void }) {
   const [shown, setShown] = useState<string | undefined>(activity);
   const latest = useRef(activity);
   const lastChange = useRef(0);
@@ -36,6 +36,10 @@ export function ActivityBar({ activity, streaming }: { activity: string | undefi
     <div className="activity" data-testid="activity" aria-live="polite">
       <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
       <span className="activity-text">{shown ?? "working"}</span>
+      <button type="button" className="stop" data-testid="abort" onClick={onStop} title="Stop the agent" aria-label="stop">
+        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="1.5" /></svg>
+        stop
+      </button>
     </div>
   );
 }

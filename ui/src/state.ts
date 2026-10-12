@@ -63,8 +63,15 @@ function updateLastAssistant(entries: Entry[], update: (entry: Extract<Entry, { 
   return [...withOpen.slice(0, -1), update(last)];
 }
 
-export function reduce(state: PaneState, message: ServerMessage): PaneState {
+export type LocalAction = { type: "drop_last_turn" };
+
+export function reduce(state: PaneState, message: ServerMessage | LocalAction): PaneState {
   switch (message.type) {
+    case "drop_last_turn": {
+      const lastUserIndex = state.entries.map((e) => e.kind).lastIndexOf("user");
+      if (lastUserIndex === -1) return state;
+      return { ...state, entries: state.entries.slice(0, lastUserIndex), lastTurn: undefined };
+    }
     case "hello": {
       const { type: _type, ...hello } = message;
       return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, sessionName: hello.sessionName ?? "New Conversation", linkGroup: hello.linkGroup, entries: [], lastTurn: undefined };

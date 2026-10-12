@@ -102,17 +102,26 @@ test("the activity line shows what the agent is doing and leaves when it is done
   await expect(page.getByTestId("send")).toHaveText("send");
   await expect(activity).toHaveCount(0);
   await expect(page.getByTestId("thinking")).toHaveCount(0);
+  await expect(page.getByTestId("undo-turn")).toHaveCount(0);
 });
 
-test("abort while streaming marks the turn aborted", async ({ page }) => {
+test("stop halts the turn; Undo reverts it and hands the message back", async ({ page }) => {
   await open(page);
   await page.getByTestId("prompt").fill("go slow");
   await page.getByTestId("prompt").press("Enter");
   await expect(page.getByTestId("assistant-bubble").last().getByTestId("tool-card").first()).toBeVisible();
-  await expect(page.getByTestId("abort")).toHaveText("stop");
-  await page.getByTestId("abort").click();
+  const stop = page.getByTestId("activity").getByTestId("abort");
+  await expect(stop).toContainText("stop");
+  await expect(stop.locator("svg")).toHaveCount(1);
+  await stop.click();
   await expect(page.getByTestId("turn-footer")).toContainText("Aborted");
   await expect(page.getByTestId("send")).toHaveText("send");
+  await expect(page.getByTestId("activity")).toHaveCount(0);
+  const before = await page.getByTestId("user-bubble").count();
+  await page.getByTestId("undo-turn").click();
+  await expect(page.getByTestId("prompt")).toHaveValue("go slow");
+  await expect(page.getByTestId("user-bubble")).toHaveCount(before - 1);
+  await expect(page.getByTestId("turn-footer")).toHaveCount(0);
 });
 
 test("model picker searches and picks; thinking picker round-trips", async ({ page }) => {

@@ -180,6 +180,9 @@ export class SessionHub {
       case "list_sessions":
         this.sendTo(socket, { type: "sessions", sessions: await this.agent.listSessions() });
         return;
+      case "memory_read":
+        this.sendTo(socket, { type: "memory", ...(await this.houdini.memoryRead()) });
+        return;
       case "memory_edit":
         await this.houdini.memoryReplace(message.text);
         this.broadcast({ type: "memory", ...(await this.houdini.memoryRead()) });

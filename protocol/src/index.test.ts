@@ -15,6 +15,7 @@ const clientMessages: ClientMessage[] = [
   { type: "compact" },
   { type: "list_models" },
   { type: "list_sessions" },
+  { type: "memory_read" },
   { type: "memory_edit", text: "# memo" },
   { type: "undo_compaction" },
   { type: "set_file_tools", enabled: true },

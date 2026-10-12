@@ -41,6 +41,7 @@ export type ClientMessage =
   | { type: "compact" }
   | { type: "list_models" }
   | { type: "list_sessions" }
+  | { type: "memory_read" }
   | { type: "memory_edit"; text: string }
   | { type: "undo_compaction" }
   | { type: "set_file_tools"; enabled: boolean }
@@ -92,6 +93,7 @@ const CLIENT_TYPES: Record<ClientMessage["type"], readonly string[]> = {
   compact: [],
   list_models: [],
   list_sessions: [],
+  memory_read: [],
   memory_edit: ["text"],
   undo_compaction: [],
   set_file_tools: ["enabled"],

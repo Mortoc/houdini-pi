@@ -1,8 +1,30 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": ".", "outDir": "dist-types", "jsx": "react-jsx", "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext", "moduleResolution": "Bundler", "noEmit": false, "emitDeclarationOnly": true
+    "outDir": "dist-types",
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@houdini-pi/protocol": [
+        "../protocol/src/index.ts"
+      ]
+    }
   },
-  "include": ["src", "e2e", "vite.config.ts"]
+  "include": [
+    "src",
+    "e2e",
+    "vite.config.ts"
+  ]
 }

@@ -10,7 +10,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "^1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
     "@houdini-pi/pi-package": "0.1.0",
     "@houdini-pi/protocol": "0.1.0",
     "ws": "^8.22.0"

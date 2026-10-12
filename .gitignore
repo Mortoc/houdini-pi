@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.pi/sessions/
+*.pyc
+__pycache__/
+.playwright/
+test-results/

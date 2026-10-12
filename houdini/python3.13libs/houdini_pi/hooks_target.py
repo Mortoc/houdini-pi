@@ -33,7 +33,7 @@ def _h() -> Any:
 def scene_context() -> dict[str, Any]:
     hou = _h()
     hip = hou.hipFile.path()
-    is_untitled = hou.hipFile.basename() == "untitled.hip" and not hou.hipFile.hasUnsavedChanges()
+    is_untitled = _is_untitled(hou)
     selected = [{"path": node.path(), "type": node.type().name()} for node in hou.selectedNodes()]
     current_network = None
     display_node = None
@@ -100,28 +100,82 @@ def memory_write(text: str, prev: str | None) -> dict[str, Any]:
     return {"chars": len(text), "prev": bool(prev)}
 
 
+def _is_untitled(hou: Any) -> bool:
+    """A scene that has never been saved. Houdini reports it as untitled.hip whether or not it has edits."""
+    return hou.hipFile.basename() == "untitled.hip"
+
+
 def backup_scene() -> dict[str, Any]:
-    """Write a Houdini backup (hou.hipFile.saveAsBackup) so a turn can be recovered beyond undo."""
+    """Write a Houdini backup (hou.hipFile.saveAsBackup) so a turn can be recovered beyond undo.
+
+    A never-saved scene has nowhere to back up to; that is reported as skipped,
+    not raised, because the artist asking for work before saving is normal.
+    """
     hou = _h()
-    is_untitled = hou.hipFile.basename() == "untitled.hip" and not hou.hipFile.hasUnsavedChanges()
-    if is_untitled:
-        return {"skipped": "untitled scene"}
-    return {"path": hou.hipFile.saveAsBackup()}
+    if _is_untitled(hou):
+        return {"skipped": "the scene has never been saved; save it to get backups before agent edits"}
+    try:
+        return {"path": hou.hipFile.saveAsBackup()}
+    except Exception as exc:  # hou.OperationFailed when $HOUDINI_BACKUP_DIR is unwritable, for one
+        return {"skipped": f"Houdini refused the backup: {exc}"}
 
 
 PANE_INTERFACE = "houdini_pi"
 
 
-def _pi_link_group(hou: Any):
-    """The link group of the Pi pane tab (Houdini's own Link Pane Tab widget), or None."""
+def _pi_tabs(hou: Any) -> list[Any]:
     ui = getattr(hou, "ui", None)
     if ui is None:
-        return None
-    for tab in ui.paneTabs():
-        is_ours = tab.type() == hou.paneTabType.PythonPanel and tab.activeInterface() is not None and tab.activeInterface().name() == PANE_INTERFACE
-        if is_ours:
-            return tab.linkGroup()
-    return None
+        return []
+    return [
+        tab
+        for tab in ui.paneTabs()
+        if tab.type() == hou.paneTabType.PythonPanel and tab.activeInterface() is not None and tab.activeInterface().name() == PANE_INTERFACE
+    ]
+
+
+def _pi_link_group(hou: Any):
+    """The link group of the Pi pane tab, or None when no pane is open."""
+    tabs = _pi_tabs(hou)
+    return tabs[0].linkGroup() if tabs else None
+
+
+def _link_name(hou: Any, group: Any) -> str:
+    if group == hou.paneLinkType.Pinned:
+        return "none"
+    if group == hou.paneLinkType.FollowSelection:
+        return "selection"
+    for n in range(1, 10):
+        if group == getattr(hou.paneLinkType, f"Group{n}"):
+            return str(n)
+    raise ValueError(f"unknown link group {group!r}")
+
+
+def _link_value(hou: Any, name: str) -> Any:
+    if name == "none":
+        return hou.paneLinkType.Pinned
+    if name == "selection":
+        return hou.paneLinkType.FollowSelection
+    if name in {str(n) for n in range(1, 10)}:
+        return getattr(hou.paneLinkType, f"Group{name}")
+    raise ValueError(f"unknown link group name {name!r}")
+
+
+def get_link_group() -> dict[str, Any]:
+    """The Pi pane's Link Pane Tab setting, as the pane's own control shows it."""
+    hou = _h()
+    group = _pi_link_group(hou)
+    return {"group": None if group is None else _link_name(hou, group)}
+
+
+def set_link_group(group: str) -> dict[str, Any]:
+    """Set every open Pi pane's link group; Houdini hides its own widget on Python Panel tabs."""
+    hou = _h()
+    value = _link_value(hou, group)
+    tabs = _pi_tabs(hou)
+    for tab in tabs:
+        tab.setLinkGroup(value)
+    return {"group": group, "tabs": len(tabs)}
 
 
 def follow_nodes(paths: list[str]) -> dict[str, Any]:
@@ -158,7 +212,7 @@ PREVIEW_DIR_NAME = ".houdini-pi/previews"
 PREVIEW_ROP = "houdini_pi_preview"
 
 
-def render_cop(node_path: str, max_size: int = 1024) -> dict[str, Any]:
+def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
     """Render a Copernicus node to a PNG through a temporary File Output (rop_image) COP.
 
     The ROP is created beside the node, pointed at it with `coppath`, executed

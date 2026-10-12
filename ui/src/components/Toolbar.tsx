@@ -1,10 +1,15 @@
-import type { ClientMessage, ThinkingLevel } from "@houdini-pi/protocol";
+import type { ClientMessage, LinkGroup, ThinkingLevel } from "@houdini-pi/protocol";
 import type { Tab } from "../App.js";
 import type { PaneState } from "../state.js";
 import type { Status } from "../ws.js";
 import { ModelPicker } from "./ModelPicker.js";
 
 const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+const LINKS: { value: LinkGroup; label: string }[] = [
+  { value: "none", label: "No Link" },
+  ...(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((n) => ({ value: n, label: `Link ${n}` })),
+  { value: "selection", label: "Last Selected Node" },
+];
 
 interface Props {
   state: PaneState;
@@ -26,6 +31,20 @@ export function Toolbar({ state, status, send, tab, onTab }: Props) {
           {state.sessionName}
         </span>
         <span className="spacer" />
+        <select
+          aria-label="link pane tab"
+          data-testid="link-picker"
+          title="Link Pane Tab: panes in the same group follow the node the agent works on"
+          value={state.linkGroup ?? "none"}
+          disabled={state.linkGroup === undefined}
+          onChange={(e) => send({ type: "set_link_group", group: e.target.value as LinkGroup })}
+        >
+          {LINKS.map((link) => (
+            <option key={link.value} value={link.value}>
+              {link.label}
+            </option>
+          ))}
+        </select>
         {status !== "open" && (
           <span className={`status status-${status}`} data-testid="status" title="Connection to the houdini-pi sidecar">
             {status === "connecting" ? "connecting to sidecar…" : "sidecar disconnected, reconnecting…"}

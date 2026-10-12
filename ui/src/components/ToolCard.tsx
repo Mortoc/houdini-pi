@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { ToolCall } from "../state.js";
 import { CodeBlock } from "./CodeBlock.js";
+import { CopyButton } from "./CopyButton.js";
 
 function houdiniSummary(tool: ToolCall): string | undefined {
   const is_houdini = tool.toolName.startsWith("mcp__fxhoudini__");
@@ -20,22 +22,80 @@ export function scriptOf(tool: ToolCall): { code: string; language: "python" | "
   return undefined;
 }
 
+export interface ShownResult {
+  text: string;
+  level: "ok" | "warning" | "error";
+}
+
+function lastLine(text: string): string {
+  const lines = text.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim().length > 0);
+  return lines.at(-1) ?? "";
+}
+
+/**
+ * What of a tool result is worth a human's eyes. A successful execute_python
+ * shows nothing; a failed one shows the exception line; stderr is a warning.
+ * Other tools show their text only when they failed or returned something short.
+ */
+export function shownResult(tool: ToolCall): ShownResult | undefined {
+  if (tool.result === undefined) return undefined;
+  const is_code_tool = tool.toolName === "mcp__fxhoudini__execute_python" || tool.toolName === "codemode";
+  if (is_code_tool) {
+    let parsed: Record<string, unknown> | undefined;
+    try {
+      parsed = JSON.parse(tool.result) as Record<string, unknown>;
+    } catch {
+      parsed = undefined;
+    }
+    if (parsed === undefined) return tool.isError ? { text: tool.result, level: "error" } : undefined;
+    const error = (parsed["error"] ?? parsed["eval_error"]) as string | undefined;
+    if (error) return { text: `${lastLine(error)}\n\n${error}`.trim(), level: "error" };
+    const stderr = parsed["stderr"] as string | undefined;
+    if (stderr && stderr.trim().length > 0) return { text: stderr.trim(), level: "warning" };
+    return undefined;
+  }
+  if (tool.isError) return { text: tool.result, level: "error" };
+  return tool.result.length <= 400 ? { text: tool.result, level: "ok" } : undefined;
+}
+
 export function ToolCard({ tool }: { tool: ToolCall }) {
   const label = tool.toolName === "inspect_cop" ? "inspect COP" : tool.toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
   const summary = houdiniSummary(tool);
   const pending = tool.result === undefined;
   const script = scriptOf(tool);
+  const result = shownResult(tool);
+  const [expanded, setExpanded] = useState(false);
+  const open_by_default = script !== undefined || tool.image !== undefined || result?.level === "error";
   return (
-    <details className={`tool${tool.isError ? " error" : ""}${pending ? " pending" : ""}`} data-testid="tool-card" open={script !== undefined || tool.image !== undefined}>
+    <details className={`tool${tool.isError ? " error" : ""}${pending ? " pending" : ""}`} data-testid="tool-card" open={open_by_default}>
       <summary>
         <span className="tool-name">{label}</span>
         {summary && <span className="tool-summary">{summary}</span>}
         <span className="tool-status">{pending ? "…" : tool.isError ? "error" : `${tool.durationMs} ms`}</span>
       </summary>
-      {tool.image !== undefined && <img className="tool-image" data-testid="tool-image" alt={`${label} result`} src={`data:${tool.image.mimeType};base64,${tool.image.data}`} />}
+      {tool.image !== undefined && (
+        <img
+          className={`tool-image${expanded ? " expanded" : " thumb"}`}
+          data-testid="tool-image"
+          alt={`${label} result`}
+          title={expanded ? "click to shrink" : "click to expand"}
+          src={`data:${tool.image.mimeType};base64,${tool.image.data}`}
+          onClick={() => setExpanded(!expanded)}
+        />
+      )}
       {script !== undefined && <CodeBlock code={script.code} language={script.language} />}
-      {script === undefined && <pre className="tool-args">{JSON.stringify(tool.args, null, 2)}</pre>}
-      {!pending && <pre className="tool-result">{tool.result}</pre>}
+      {script === undefined && (
+        <div className="text-wrap">
+          <CopyButton text={JSON.stringify(tool.args, null, 2)} />
+          <pre className="tool-args">{JSON.stringify(tool.args, null, 2)}</pre>
+        </div>
+      )}
+      {result !== undefined && (
+        <div className="text-wrap">
+          <CopyButton text={result.text} />
+          <pre className={`tool-result ${result.level}`} data-testid="tool-result">{result.text}</pre>
+        </div>
+      )}
     </details>
   );
 }

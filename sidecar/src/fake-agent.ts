@@ -1,4 +1,4 @@
-import type { HistoryMessage, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { HistoryMessage, HistoryTool, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 import type { AgentEvent, AgentLike, AgentStats } from "./agent-like.js";
 
 /** A 1×1 orange PNG. */
@@ -57,17 +57,25 @@ export class FakeAgent implements AgentLike {
         { type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", args: { node_path: "/obj/geo1/wire1", parm_name: "radius", value: 0.01 } },
         { type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", result: { ok: true }, isError: false, durationMs: 12 },
         { type: "tool_execution_start", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", args: { code: "import hou\n# thin every wire\nfor node in hou.node('/obj/geo1').children():\n    if node.type().name() == 'wire':\n        node.parm('radius').set(0.01)\nprint('done')" } },
-        { type: "tool_execution_end", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", result: { success: true, stdout: "done" }, isError: false, durationMs: 40 },
+        { type: "tool_execution_end", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", result: JSON.stringify({ success: true, executed: true, return_value: null, stdout: "done" }), isError: false, durationMs: 40 },
+        { type: "tool_execution_start", toolCallId: "call-2b", toolName: "mcp__fxhoudini__execute_python", args: { code: "hou.node('/obj/nope').destroy()" } },
+        { type: "tool_execution_end", toolCallId: "call-2b", toolName: "mcp__fxhoudini__execute_python", result: JSON.stringify({ success: false, executed: false, error: "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nAttributeError: 'NoneType' object has no attribute 'destroy'\n" }), isError: true, durationMs: 9 },
         { type: "tool_execution_start", toolCallId: "call-3", toolName: "inspect_cop", args: { node_path: "/obj/hex_copnet/color_out" } },
         { type: "tool_execution_end", toolCallId: "call-3", toolName: "inspect_cop", result: "Rendered /obj/hex_copnet/color_out", isError: false, durationMs: 300, image: { mimeType: "image/png", data: TINY_PNG } },
         ...reply.split(" ").map((word): AgentEvent => ({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: `${word} ` } })),
         { type: "message_end", message: { role: "assistant", text: reply } },
         { type: "turn_end", turnIndex: this.turns++ },
       ];
+      const tools: HistoryTool[] = [];
       for (const event of steps) {
         if (!(await this.step(event))) break;
+        if (event.type === "tool_execution_start") tools.push({ toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
+        if (event.type === "tool_execution_end") {
+          const tool = tools.find((t) => t.toolCallId === event.toolCallId);
+          if (tool) Object.assign(tool, { result: typeof event.result === "string" ? event.result : JSON.stringify(event.result), isError: event.isError, ...(event.image ? { image: event.image } : {}) });
+        }
       }
-      if (!this.aborted) this.history.push({ role: "assistant", text: reply });
+      if (!this.aborted) this.history.push({ role: "assistant", text: reply, tools });
       this.isStreaming = false;
       this.emit({ type: "agent_settled", aborted: this.aborted });
     };

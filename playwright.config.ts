@@ -5,6 +5,10 @@ export default defineConfig({
   testDir: "./ui/e2e",
   timeout: 30_000,
   retries: 0,
+  // One fake-agent sidecar serves every test, and it holds one conversation:
+  // parallel tests would interleave their prompts.
+  workers: 1,
+  fullyParallel: false,
   reporter: process.env["CI"] ? "github" : "list",
   use: {
     baseURL: "http://127.0.0.1:9123",

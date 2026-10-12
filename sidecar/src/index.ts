@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import type { LinkGroup } from "@houdini-pi/protocol";
 import { createHoudiniExtension, HoudiniBridge } from "@houdini-pi/pi-package";
 import type { AgentLike } from "./agent-like.js";
 import type { PiAgent as PiAgentType } from "./pi-agent.js";
@@ -45,8 +46,11 @@ export function parseCli(argv: string[]) {
 function fakeHoudini(): HoudiniPort {
   let memory = "## Conventions\n\n- metres everywhere\n";
   let prev: string | undefined;
+  let link: LinkGroup = "none";
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
+    linkGroup: async () => link,
+    setLinkGroup: async (group) => { link = group; },
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),
     memoryReplace: async (text) => { prev = memory; memory = text; },
     memoryRollback: async () => { if (prev !== undefined) { memory = prev; prev = undefined; } },
@@ -79,6 +83,7 @@ export async function main(argv = process.argv.slice(2)) {
       followNodes: () => settings.followNodes,
       onBackup: (report) => {
         if ("error" in report) hubRef?.broadcast({ type: "error", message: `backup before the turn failed: ${report.error}` });
+        if ("skipped" in report) hubRef?.broadcast({ type: "error", message: `no backup this turn: ${report.skipped}` });
       },
       condense: (prompt) => piAgent!.condense(prompt),
       onCompaction: (report) => {

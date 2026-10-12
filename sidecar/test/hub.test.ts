@@ -20,14 +20,17 @@ class FakeSocket implements SocketLike {
   }
 }
 
-type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number };
+type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number; link: string };
 
 function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
   const port: FakeHoudini = {
     memory: "# Memory\n",
     prev: undefined as string | undefined,
     undos: 0,
+    link: "none",
     hipPath: async () => "/scenes/test.hip",
+    linkGroup: async () => port.link as "none",
+    setLinkGroup: async (group) => { port.link = group; },
     memoryRead: async () => ({ text: port.memory, prevAvailable: port.prev !== undefined }),
     memoryReplace: async (text: string) => { port.prev = port.memory; port.memory = text; },
     memoryRollback: async () => { if (port.prev !== undefined) { port.memory = port.prev; port.prev = undefined; } },
@@ -46,7 +49,7 @@ describe("SessionHub", () => {
     hub.attach(socket);
     await settle();
     expect(socket.types()).toEqual(["hello", "history"]);
-    expect(socket.received[0]).toMatchObject({ hip: "/scenes/test.hip", sessionName: "New Conversation", model: { id: "fake-fast" } });
+    expect(socket.received[0]).toMatchObject({ hip: "/scenes/test.hip", sessionName: "New Conversation", model: { id: "fake-fast" }, linkGroup: "none" });
   });
 
   it("streams one prompt to every attached pane in order", async () => {
@@ -139,6 +142,10 @@ describe("SessionHub", () => {
     socket.emit("message", encode({ type: "undo_turn" }));
     await settle();
     expect(houdini.undos).toBe(1);
+    socket.emit("message", encode({ type: "set_link_group", group: "2" }));
+    await socket.waitFor("link_group");
+    expect(houdini.link).toBe("2");
+    expect(socket.received.find((m) => m.type === "link_group")).toMatchObject({ group: "2" });
   });
 
   it("offers only vision models and passes tool images through", async () => {

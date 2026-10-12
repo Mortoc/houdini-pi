@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ClientMessage } from "@houdini-pi/protocol";
+import { ActivityBar } from "./components/ActivityBar.js";
 import { ChatLog } from "./components/ChatLog.js";
 import { MemoryTab } from "./components/MemoryTab.js";
 import { PromptBox } from "./components/PromptBox.js";
@@ -62,7 +63,8 @@ export function App() {
       <Toolbar state={state} status={status} send={send} tab={tab} onTab={openTab} />
       {tab === "chat" && (
         <>
-          <ChatLog entries={state.entries} lastTurn={state.lastTurn} streaming={state.isStreaming} send={send} />
+          <ChatLog entries={state.entries} lastTurn={state.lastTurn} send={send} />
+          <ActivityBar activity={state.activity} streaming={state.isStreaming} />
           <PromptBox streaming={state.isStreaming} connected={status === "open"} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} />
         </>
       )}

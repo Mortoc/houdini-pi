@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <pythonPanelDocument>
-  <interface name="houdini_pi" label="Pi" icon="MISC_python" showNetworkNavigationBar="false" help_url="https://github.com/Mortoc/houdini-pi">
+  <interface name="houdini_pi" label="Pi" icon="MISC_python" showNetworkNavigationBar="false" help_url="https://mortoc.github.io/houdini-pi/help">
     <script><![CDATA[
 import houdini_pi.panel
 

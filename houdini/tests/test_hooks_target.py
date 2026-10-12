@@ -54,8 +54,17 @@ def test_memory_round_trips_through_root_user_data(hou):
 
 def test_backup_writes_a_houdini_backup_unless_untitled(hou):
     assert hooks_target.backup_scene() == {"path": "/scenes/backup/rock_bak1.hip"}
-    hou.hipFile = FakeHipFile("/tmp/untitled.hip", "untitled.hip", unsaved=False)
-    assert hooks_target.backup_scene() == {"skipped": "untitled scene"}
+    hou.hipFile = FakeHipFile("/tmp/untitled.hip", "untitled.hip", unsaved=True)
+    assert hooks_target.backup_scene()["skipped"].startswith("the scene has never been saved")
+    assert hooks_target.scene_context()["hip"] is None
+
+
+def test_backup_reports_a_refusal_instead_of_raising(hou):
+    def refuse():
+        raise RuntimeError("Permission denied: /ro/backup")
+
+    hou.hipFile.saveAsBackup = refuse
+    assert hooks_target.backup_scene() == {"skipped": "Houdini refused the backup: Permission denied: /ro/backup"}
 
 
 def test_follow_selects_the_last_node_and_drives_linked_panes(hou):
@@ -120,3 +129,18 @@ def test_render_cop_refuses_non_cop_nodes_and_reports_a_missing_file(hou, tmp_pa
     with pytest.raises(RuntimeError, match="produced no file"):
         hooks_target.render_cop("/obj/c/out")
     assert copnet.children_created[0].destroyed is True
+
+
+def test_link_group_round_trips_through_the_pi_tab(hou):
+    assert hooks_target.get_link_group() == {"group": None}
+    hou.ui = FakeUI()
+    pi_tab = FakePaneTab(hou.paneTabType.PythonPanel, hou.paneLinkType.Pinned, interface="houdini_pi")
+    hou.ui.tabs = [pi_tab, FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.Group3)]
+    assert hooks_target.get_link_group() == {"group": "none"}
+    assert hooks_target.set_link_group("3") == {"group": "3", "tabs": 1}
+    assert pi_tab.linkGroup() is hou.paneLinkType.Group3
+    assert hooks_target.get_link_group() == {"group": "3"}
+    hooks_target.set_link_group("selection")
+    assert pi_tab.linkGroup() is hou.paneLinkType.FollowSelection
+    with pytest.raises(ValueError, match="unknown link group name"):
+        hooks_target.set_link_group("12")

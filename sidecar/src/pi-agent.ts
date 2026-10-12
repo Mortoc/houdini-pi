@@ -20,7 +20,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Model } from "@earendil-works/pi-ai";
-import type { HistoryMessage, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { HistoryMessage, HistoryTool, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 import type { AgentEvent, AgentLike, AgentStats } from "./agent-like.js";
 
 export interface PiAgentOptions {
@@ -163,14 +163,7 @@ export class PiAgent implements AgentLike {
   async compact() { await this.session.compact(); }
 
   getHistory(): HistoryMessage[] {
-    const history: HistoryMessage[] = [];
-    for (const message of this.session.messages) {
-      const is_chat = message.role === "user" || message.role === "assistant";
-      if (!is_chat) continue;
-      const text = textOf((message as { content: unknown }).content);
-      if (text.length > 0) history.push({ role: message.role as "user" | "assistant", text });
-    }
-    return history;
+    return historyOf(this.session.messages as unknown[]);
   }
 
   getStats(): AgentStats {
@@ -226,4 +219,42 @@ function firstImage(content: unknown): { mimeType: string; data: string } | unde
   if (!Array.isArray(content)) return undefined;
   const part = content.find((p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "image") as { mimeType: string; data: string } | undefined;
   return part === undefined ? undefined : { mimeType: part.mimeType, data: part.data };
+}
+
+/** The transcript as the pane shows it: text plus every tool call with its result, so a reconnect loses nothing. */
+export function historyOf(messages: unknown[]): HistoryMessage[] {
+  const history: HistoryMessage[] = [];
+  const toolsById = new Map<string, HistoryTool>();
+  for (const raw of messages) {
+    const message = raw as { role?: string; content?: unknown; toolCallId?: string; toolName?: string; isError?: boolean };
+    if (message.role === "user") {
+      const text = textOf(message.content);
+      if (text.length > 0) history.push({ role: "user", text });
+      continue;
+    }
+    if (message.role === "assistant") {
+      const parts = Array.isArray(message.content) ? (message.content as { type: string; id?: string; name?: string; arguments?: unknown }[]) : [];
+      const tools: HistoryTool[] = [];
+      for (const part of parts) {
+        if (part.type !== "toolCall" || part.id === undefined) continue;
+        const tool: HistoryTool = { toolCallId: part.id, toolName: part.name ?? "?", args: part.arguments };
+        tools.push(tool);
+        toolsById.set(part.id, tool);
+      }
+      const text = textOf(message.content);
+      const has_anything = text.length > 0 || tools.length > 0;
+      if (has_anything) history.push({ role: "assistant", text, ...(tools.length > 0 ? { tools } : {}) });
+      continue;
+    }
+    if (message.role === "toolResult" && message.toolCallId !== undefined) {
+      const tool = toolsById.get(message.toolCallId);
+      if (tool === undefined) continue;
+      const summary = summariseResult({ content: message.content });
+      tool.result = typeof summary === "string" ? summary : JSON.stringify(summary);
+      tool.isError = message.isError ?? false;
+      const image = firstImage(message.content);
+      if (image) tool.image = image;
+    }
+  }
+  return history;
 }

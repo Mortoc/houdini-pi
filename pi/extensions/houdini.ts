@@ -38,6 +38,9 @@ export interface FollowReport {
   categories?: Record<string, string>;
 }
 
+/** Longest edge of a COP preview. Enough to see wiring mistakes, small enough to be cheap in context. */
+export const COP_PREVIEW_SIZE = 256;
+
 export const COP_NUDGE =
   "You changed Copernicus (COP) nodes this turn but have not looked at the result. Call inspect_cop on the network's output node now, fix what the image shows is wrong, then finish. Do not summarise.";
 
@@ -50,7 +53,7 @@ export interface HoudiniExtensionOptions {
   followNodes?: () => boolean;
   /** Minimum time each followed selection stays on screen. Default 500 ms. */
   followMinGapMs?: number;
-  /** Reports the autosave backup taken before the first modifying tool call of a turn, or its failure. */
+  /** Reports the autosave backup taken before the first modifying tool call of a turn, why it was skipped, or its failure. */
   onBackup?: (report: { path: string } | { skipped: string } | { error: string }) => void;
   /** One-shot condense call for memory compaction. Omit to disable compaction. */
   condense?: (prompt: string, ctx: ExtensionContext) => Promise<string>;
@@ -189,7 +192,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   let nudges = 0;
   const followQueue = new FollowQueue<FollowReport>((paths) => bridge.runHelper<FollowReport>("follow_nodes", { paths }), options.followMinGapMs ?? 500);
 
-  const inspectCop = async (nodePath: string, maxSize = 1024) => {
+  const inspectCop = async (nodePath: string, maxSize = COP_PREVIEW_SIZE) => {
     const rendered = await bridge.runHelper<RenderedCop>("render_cop", { node_path: nodePath, max_size: maxSize });
     const png = await readFile(rendered.path);
     copDirty = false;
@@ -282,10 +285,10 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       promptGuidelines: ["After changing anything in a Copernicus network, call inspect_cop on its output node and check the image before finishing."],
       parameters: Type.Object({
         node_path: Type.String({ description: "Absolute path of the COP node to render, usually the network's output" }),
-        max_size: Type.Optional(Type.Number({ description: "Longest edge in pixels, default 1024" })),
+        max_size: Type.Optional(Type.Number({ description: "Longest edge in pixels, default 256" })),
       }),
       execute: async (_id, params) => {
-        const { rendered, data } = await inspectCop(params.node_path, params.max_size ?? 1024);
+        const { rendered, data } = await inspectCop(params.node_path, params.max_size ?? COP_PREVIEW_SIZE);
         return {
           content: [
             { type: "image", data, mimeType: "image/png" },

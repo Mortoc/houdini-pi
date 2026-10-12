@@ -145,8 +145,10 @@ class Enum:
 class FakePaneLinkType:
     Pinned = Enum("Pinned")
     FollowSelection = Enum("FollowSelection")
-    Group1 = Enum("Group1")
-    Group2 = Enum("Group2")
+
+
+for _n in range(1, 10):
+    setattr(FakePaneLinkType, f"Group{_n}", Enum(f"Group{_n}"))
 
 
 class FakePaneTabType:
@@ -179,6 +181,9 @@ class FakePaneTab:
 
     def linkGroup(self):  # noqa: N802
         return self._link
+
+    def setLinkGroup(self, group):  # noqa: N802
+        self._link = group
 
     def activeInterface(self):  # noqa: N802
         return None if self._interface is None else FakeInterface(self._interface)

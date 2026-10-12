@@ -1,41 +1,56 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClientMessage } from "@houdini-pi/protocol";
 import type { Entry, PaneState } from "../state.js";
+import { CopyButton } from "./CopyButton.js";
 import { Markdown } from "./Markdown.js";
 import { ToolCard } from "./ToolCard.js";
 
 interface Props {
   entries: Entry[];
   lastTurn: PaneState["lastTurn"];
-  streaming: boolean;
   send: (message: ClientMessage) => void;
 }
 
-export function ChatLog({ entries, lastTurn, streaming, send }: Props) {
-  const end = useRef<HTMLDivElement>(null);
+const STICKY_PX = 48;
+
+export function ChatLog({ entries, lastTurn, send }: Props) {
+  const log = useRef<HTMLElement>(null);
+  const [stuck, setStuck] = useState(true);
+
+  // Follow new content only while the reader is at the bottom; scrolling up
+  // to read an error must not be undone by the next streamed token.
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [entries]);
+    const el = log.current;
+    if (el !== null && stuck) el.scrollTop = el.scrollHeight;
+  }, [entries, lastTurn, stuck]);
+
+  const onScroll = () => {
+    const el = log.current;
+    if (el === null) return;
+    setStuck(el.scrollHeight - el.scrollTop - el.clientHeight <= STICKY_PX);
+  };
+
   return (
-    <main className="chat" data-testid="chat">
+    <main className="chat" data-testid="chat" data-stuck={stuck} ref={log} onScroll={onScroll}>
       {entries.length === 0 && <p className="muted empty">Ask for a change to the scene. Each answer is one undo step in Houdini.</p>}
       {entries.map((entry) => {
         if (entry.kind === "user") return <div key={entry.id} className="bubble user" data-testid="user-bubble">{entry.text}</div>;
         if (entry.kind === "notice")
           return (
             <div key={entry.id} className={`notice ${entry.level}`} data-testid="notice">
-              <span>{entry.text}</span>
+              <CopyButton text={entry.text} />
+              <span className="notice-text">{entry.text}</span>
               {entry.action === "reconnect" && <button onClick={() => window.location.reload()}>reconnect</button>}
               {entry.action === "login" && <span className="hint">Run <code>pi</code> in a terminal and <code>/login</code>, then retry.</span>}
             </div>
           );
         return (
           <div key={entry.id} className={`bubble assistant${entry.streaming ? " streaming" : ""}`} data-testid="assistant-bubble">
-            {entry.streaming && streaming && (
-              <div className="thinking" data-testid="thinking">
-                <span className="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
-                <span className="thinking-text">{entry.thinking.length > 0 ? lastLine(entry.thinking) : "thinking"}</span>
-              </div>
+            {entry.thinking.length > 0 && !entry.streaming && (
+              <details className="thinking-log" data-testid="thinking-log">
+                <summary>thinking</summary>
+                <pre>{entry.thinking}</pre>
+              </details>
             )}
             {entry.tools.map((tool) => <ToolCard key={tool.toolCallId} tool={tool} />)}
             <Markdown text={entry.text} />
@@ -49,12 +64,11 @@ export function ChatLog({ entries, lastTurn, streaming, send }: Props) {
           <button className="link" onClick={() => send({ type: "undo_turn" })}>undo this turn in Houdini</button>
         </footer>
       )}
-      <div ref={end} />
+      {!stuck && (
+        <button className="jump-down" data-testid="jump-down" onClick={() => setStuck(true)} title="Follow new messages">
+          ↓ latest
+        </button>
+      )}
     </main>
   );
-}
-
-function lastLine(text: string): string {
-  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-  return (lines.at(-1) ?? "").slice(-160);
 }

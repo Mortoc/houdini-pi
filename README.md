@@ -59,8 +59,9 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   `{"followNodes": false}` in the settings file turns this off.
 - **No summaries**: the agent ends a turn silently; a green **Done** line (or
   the tool error count) tells you how it went.
-- **COP inspection**: `inspect_cop` renders a Copernicus node to PNG through a
-  temporary File Output COP and returns the image to the model. The agent is
+- **COP inspection**: `inspect_cop` renders a Copernicus node to a 256 px PNG
+  through a temporary File Output COP and returns the image to the model; the
+  card shows a thumbnail, click to expand. The agent is
   made to call it after any COP change before it may finish; the picture shows
   up in the tool card. You can trigger it too: `/inspect-cop /obj/copnet/out`
   in the pi CLI. Previews land in `~/.houdini-pi/previews/`.

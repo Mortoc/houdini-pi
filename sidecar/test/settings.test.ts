@@ -10,7 +10,9 @@ describe("settings", () => {
     expect(loadSettings(join(dir, "none.json"))).toEqual(DEFAULT_SETTINGS);
     const file = join(dir, "settings.json");
     writeFileSync(file, JSON.stringify({ naming: { model: "openrouter/x/y" } }));
-    expect(loadSettings(file)).toEqual({ naming: { model: "openrouter/x/y", renameAtUserMessages: [1, 5] } });
+    expect(loadSettings(file)).toEqual({ naming: { model: "openrouter/x/y", renameAtUserMessages: [1, 5] }, followNodes: true });
+    writeFileSync(file, JSON.stringify({ followNodes: false }));
+    expect(loadSettings(file).followNodes).toBe(false);
   });
 
   it("refuses a corrupt file", () => {

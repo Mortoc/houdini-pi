@@ -29,6 +29,8 @@ export interface HoudiniExtensionOptions {
   houdiniPort: number;
   /** Whether pi's file tools (bash, edit, write) may run this turn. Default: never. */
   fileToolsEnabled?: () => boolean;
+  /** Whether the scene follows the agent (selection + linked pane tabs). Default: always. */
+  followNodes?: () => boolean;
   /** Reports the autosave backup taken before the first modifying tool call of a turn, or its failure. */
   onBackup?: (report: { path: string } | { skipped: string } | { error: string }) => void;
   /** One-shot condense call for memory compaction. Omit to disable compaction. */
@@ -94,6 +96,39 @@ export function uvxCommand(env: NodeJS.ProcessEnv = process.env): string {
   return env["HOUDINI_PI_UVX"] || "uvx";
 }
 
+const NODE_PATH = /^\/[A-Za-z0-9_][A-Za-z0-9_\/.:-]*$/;
+const PATH_KEYS = new Set(["node_path", "path", "parent_path", "parent", "node", "new_path", "target_path", "node_paths", "paths", "nodes", "created", "selected"]);
+
+/** Node paths a tool call touched, from its arguments and its result, in order of appearance. */
+export function nodePathsFrom(args: unknown, result: unknown): string[] {
+  const found: string[] = [];
+  const visit = (value: unknown, keyed: boolean, depth: number) => {
+    if (depth > 6) return;
+    if (typeof value === "string") {
+      if (keyed && NODE_PATH.test(value) && !found.includes(value)) found.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, keyed, depth + 1);
+      return;
+    }
+    if (typeof value === "object" && value !== null) {
+      for (const [key, item] of Object.entries(value)) visit(item, PATH_KEYS.has(key), depth + 1);
+    }
+  };
+  visit(args, false, 0);
+  let parsed: unknown = result;
+  if (typeof result === "string") {
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+      parsed = undefined;
+    }
+  }
+  visit(parsed, false, 0);
+  return found.slice(0, 20);
+}
+
 export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF, command = uvxCommand()) {
   return {
     command,
@@ -130,6 +165,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   let currentCtx: ExtensionContext | undefined;
   let turnOpen = false;
   let backedUpThisTurn = false;
+  const argsByCall = new Map<string, unknown>();
 
   const endTurn = async () => {
     if (!turnOpen) return;
@@ -169,6 +205,22 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
         }
       }
       return undefined;
+    });
+
+    pi.on("tool_execution_start", (event) => {
+      argsByCall.set(event.toolCallId, event.args);
+    });
+
+    pi.on("tool_execution_end", async (event) => {
+      const args = argsByCall.get(event.toolCallId);
+      argsByCall.delete(event.toolCallId);
+      const is_houdini = event.toolName.startsWith("mcp__fxhoudini__");
+      const wants_follow = is_houdini && !event.isError && (options.followNodes?.() ?? true);
+      if (!wants_follow) return;
+      const paths = nodePathsFrom(args, (event.result as { content?: unknown })?.content ?? event.result);
+      if (paths.length === 0) return;
+      // Best effort: following is a convenience, so a failure here is logged by the host, never raised into the turn.
+      await bridge.runHelper("follow_nodes", { paths }).catch((error) => options.onBackup?.({ error: `follow failed: ${(error as Error).message}` }));
     });
 
     pi.on("agent_settled", async (_event, ctx) => {

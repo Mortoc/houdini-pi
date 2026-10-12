@@ -11,10 +11,13 @@ export interface NamingSettings {
 
 export interface Settings {
   naming: NamingSettings;
+  /** Select the nodes the agent touches and steer pane tabs linked to the Pi pane at them. */
+  followNodes: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   naming: { model: "cheapest", renameAtUserMessages: [1, 5] },
+  followNodes: true,
 };
 
 export const SETTINGS_FILE = join(homedir(), ".houdini-pi", "settings.json");
@@ -34,5 +37,5 @@ export function loadSettings(file = SETTINGS_FILE): Settings {
   } catch (error) {
     throw new Error(`${file} is not valid JSON: ${(error as Error).message}`);
   }
-  return { naming: { ...DEFAULT_SETTINGS.naming, ...(parsed.naming ?? {}) } };
+  return { naming: { ...DEFAULT_SETTINGS.naming, ...(parsed.naming ?? {}) }, followNodes: parsed.followNodes ?? DEFAULT_SETTINGS.followNodes };
 }

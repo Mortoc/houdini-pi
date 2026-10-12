@@ -12,10 +12,18 @@ class FakeType:
 
 
 class FakeNode:
-    def __init__(self, path: str, type_name: str = "geo"):
+    def __init__(self, path: str, type_name: str = "geo", parent: "FakeNode | None" = None):
         self._path = path
         self._type = FakeType(type_name)
+        self._parent = parent
         self.user_data: dict[str, str] = {}
+        self.selected = False
+
+    def parent(self):
+        return self._parent
+
+    def setSelected(self, on: bool, clear_all_selected: bool = False):  # noqa: N802
+        self.selected = on
 
     def path(self) -> str:
         return self._path
@@ -74,17 +82,97 @@ class FakeHipFile:
         return f"/scenes/backup/rock_bak{self.backups}.hip"
 
 
+class Enum:
+    def __init__(self, name: str):
+        self.name = name
+
+    def __repr__(self):
+        return self.name
+
+
+class FakePaneLinkType:
+    Pinned = Enum("Pinned")
+    FollowSelection = Enum("FollowSelection")
+    Group1 = Enum("Group1")
+    Group2 = Enum("Group2")
+
+
+class FakePaneTabType:
+    PythonPanel = Enum("PythonPanel")
+    NetworkEditor = Enum("NetworkEditor")
+    Parm = Enum("Parm")
+    SceneViewer = Enum("SceneViewer")
+
+
+class FakeInterface:
+    def __init__(self, name: str):
+        self._name = name
+
+    def name(self) -> str:
+        return self._name
+
+
+class FakePaneTab:
+    """A pane tab with no node to follow (a scene viewer, say)."""
+
+    def __init__(self, tab_type, link_group, interface: str | None = None):
+        self._type = tab_type
+        self._link = link_group
+        self._interface = interface
+        self.pwd = None
+        self.current = None
+
+    def type(self):
+        return self._type
+
+    def linkGroup(self):  # noqa: N802
+        return self._link
+
+    def activeInterface(self):  # noqa: N802
+        return None if self._interface is None else FakeInterface(self._interface)
+
+
+class FakeNodeTab(FakePaneTab):
+    """A pane tab that shows a node: network editor, parameter view."""
+
+    def setPwd(self, node):  # noqa: N802
+        self.pwd = node
+
+    def setCurrentNode(self, node, pick_node: bool = True):  # noqa: N802
+        self.current = node
+
+
+class FakeUI:
+    def __init__(self):
+        self.tabs: list[FakePaneTab] = []
+
+    def paneTabs(self):  # noqa: N802
+        return list(self.tabs)
+
+
 class FakeHou:
+    paneLinkType = FakePaneLinkType
+    paneTabType = FakePaneTabType
+
     def __init__(self):
         self.root = FakeNode("/", "root")
         self.hipFile = FakeHipFile()
         self.undos = FakeUndos()
-        self.selected: list[FakeNode] = [FakeNode("/obj/geo1/wire1", "wire")]
+        self.nodes: dict[str, FakeNode] = {"/": self.root}
+        obj = self.add_node("/obj", "objnet")
+        geo = self.add_node("/obj/geo1", "geo", obj)
+        self.add_node("/obj/geo1/wire1", "wire", geo)
+        self.selected: list[FakeNode] = [self.nodes["/obj/geo1/wire1"]]
         self._frame = 12.0
+        self.ui = None
 
-    def node(self, path: str) -> FakeNode:
-        assert path == "/"
-        return self.root
+    def add_node(self, path: str, type_name: str, parent: FakeNode | None = None) -> FakeNode:
+        node = FakeNode(path, type_name, parent)
+        self.nodes[path] = node
+        return node
+
+    def node(self, path: str):
+        return self.nodes.get(path)
 
     def selectedNodes(self):  # noqa: N802
         return list(self.selected)

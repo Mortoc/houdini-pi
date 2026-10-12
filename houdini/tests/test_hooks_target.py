@@ -1,6 +1,6 @@
 import pytest
 
-from fake_hou import FakeHipFile, FakeHou
+from fake_hou import FakeHipFile, FakeHou, FakeNodeTab, FakePaneTab, FakeUI
 from houdini_pi import hooks_target
 
 
@@ -56,3 +56,34 @@ def test_backup_writes_a_houdini_backup_unless_untitled(hou):
     assert hooks_target.backup_scene() == {"path": "/scenes/backup/rock_bak1.hip"}
     hou.hipFile = FakeHipFile("/tmp/untitled.hip", "untitled.hip", unsaved=False)
     assert hooks_target.backup_scene() == {"skipped": "untitled scene"}
+
+
+def test_follow_selects_the_last_node_and_drives_linked_panes(hou):
+    hou.ui = FakeUI()
+    pi_tab = FakePaneTab(hou.paneTabType.PythonPanel, hou.paneLinkType.Group2, interface="houdini_pi")
+    network = FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.Group2)
+    parms = FakeNodeTab(hou.paneTabType.Parm, hou.paneLinkType.Group2)
+    other = FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.Group1)
+    viewer = FakePaneTab(hou.paneTabType.SceneViewer, hou.paneLinkType.Group2)
+    hou.ui.tabs = [pi_tab, network, parms, other, viewer]
+    hou.add_node("/obj/geo2", "geo", hou.nodes["/obj"])
+
+    report = hooks_target.follow_nodes(["/obj/geo1/wire1", "/obj/geo2", "/obj/missing"])
+
+    assert report == {"followed": "/obj/geo2", "panes": 2}
+    assert hou.nodes["/obj/geo2"].selected is True
+    assert network.pwd is hou.nodes["/obj"] and network.current is hou.nodes["/obj/geo2"]
+    assert parms.current is hou.nodes["/obj/geo2"]
+    assert other.current is None
+
+
+def test_follow_without_a_link_group_only_selects(hou):
+    hou.ui = FakeUI()
+    hou.ui.tabs = [
+        FakePaneTab(hou.paneTabType.PythonPanel, hou.paneLinkType.FollowSelection, interface="houdini_pi"),
+        FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.FollowSelection),
+    ]
+    report = hooks_target.follow_nodes(["/obj/geo1/wire1"])
+    assert report == {"followed": "/obj/geo1/wire1", "panes": 0}
+    assert hou.nodes["/obj/geo1/wire1"].selected is True
+    assert hooks_target.follow_nodes(["/nope"]) == {"followed": None, "panes": 0}

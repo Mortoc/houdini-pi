@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canModifyScene, contextBlock, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
+import { canModifyScene, contextBlock, nodePathsFrom, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
 
 type Handler = (event: any, ctx: any) => any;
 
@@ -31,6 +31,7 @@ class FakeBridge implements HoudiniExtensionBridge {
   calls: { name: string; kwargs: Record<string, unknown> }[] = [];
   executed: string[] = [];
   backups = 0;
+  followed: string[][] = [];
   memory = "## Conventions\n\n- metres\n";
   prev: string | null = null;
   up = true;
@@ -46,6 +47,7 @@ class FakeBridge implements HoudiniExtensionBridge {
       case "begin_turn": if (this.failBeginTurn) throw new Error("hou exploded"); return undefined as T;
       case "end_turn": return undefined as T;
       case "backup_scene": this.backups++; return { path: `/bak/${this.backups}.hip` } as T;
+      case "follow_nodes": this.followed.push(kwargs["paths"] as string[]); return { followed: (kwargs["paths"] as string[]).at(-1), panes: 1 } as T;
     }
     throw new Error(`unexpected helper ${name}`);
   }
@@ -150,6 +152,34 @@ describe("houdini extension", () => {
     await pi.fire("before_agent_start", { prompt: "y", systemPromptOptions: {} });
     await pi.fire("tool_call", { toolName: "mcp__fxhoudini__delete_node", toolCallId: "4", input: {} });
     expect(bridge.backups).toBe(2);
+  });
+
+  it("extracts node paths from tool args and results, keyed fields only", () => {
+    expect(nodePathsFrom({ node_path: "/obj/geo1", value: "/not/a/key" }, undefined)).toEqual(["/obj/geo1"]);
+    expect(nodePathsFrom({ parent_path: "/obj" }, JSON.stringify({ created: [{ path: "/obj/box1" }, { path: "/obj/box2" }] }))).toEqual(["/obj", "/obj/box1", "/obj/box2"]);
+    expect(nodePathsFrom({ node_paths: ["/obj/a", "/obj/a"] }, "not json")).toEqual(["/obj/a"]);
+    expect(nodePathsFrom({ code: "/usr/bin/python" }, [{ type: "text", text: JSON.stringify({ node: "/obj/c" }) }])).toEqual([]);
+    expect(nodePathsFrom({ path: "relative/path" }, undefined)).toEqual([]);
+  });
+
+  it("makes the scene follow Houdini tool calls that touched nodes", async () => {
+    const bridge = new FakeBridge();
+    const pi = load(bridge);
+    const call = async (id: string, toolName: string, args: unknown, result: unknown, isError = false) => {
+      await pi.fire("tool_execution_start", { toolCallId: id, toolName, args });
+      await pi.fire("tool_execution_end", { toolCallId: id, toolName, result, isError });
+    };
+    await call("1", "mcp__fxhoudini__get_node_card", { node_path: "/obj/geo1" }, { content: [{ type: "text", text: "{}" }] });
+    await call("2", "mcp__fxhoudini__create_node", { parent_path: "/obj" }, JSON.stringify({ path: "/obj/envlight1" }));
+    await call("3", "mcp__fxhoudini__get_scene_info", {}, "{}");
+    await call("4", "mcp__fxhoudini__delete_node", { node_path: "/obj/x" }, "boom", true);
+    await call("5", "read", { path: "/etc/hosts" }, "");
+    expect(bridge.followed).toEqual([["/obj/geo1"], ["/obj", "/obj/envlight1"]]);
+    const quiet = new FakeBridge();
+    const off = load(quiet, { followNodes: () => false });
+    await off.fire("tool_execution_start", { toolCallId: "6", toolName: "mcp__fxhoudini__get_node_card", args: { node_path: "/obj/geo1" } });
+    await off.fire("tool_execution_end", { toolCallId: "6", toolName: "mcp__fxhoudini__get_node_card", result: "{}", isError: false });
+    expect(quiet.followed).toEqual([]);
   });
 
   it("exposes memory tools that write through the bridge", async () => {

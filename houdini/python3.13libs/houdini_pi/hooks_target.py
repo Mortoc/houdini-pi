@@ -107,3 +107,47 @@ def backup_scene() -> dict[str, Any]:
     if is_untitled:
         return {"skipped": "untitled scene"}
     return {"path": hou.hipFile.saveAsBackup()}
+
+
+PANE_INTERFACE = "houdini_pi"
+
+
+def _pi_link_group(hou: Any):
+    """The link group of the Pi pane tab (Houdini's own Link Pane Tab widget), or None."""
+    ui = getattr(hou, "ui", None)
+    if ui is None:
+        return None
+    for tab in ui.paneTabs():
+        is_ours = tab.type() == hou.paneTabType.PythonPanel and tab.activeInterface() is not None and tab.activeInterface().name() == PANE_INTERFACE
+        if is_ours:
+            return tab.linkGroup()
+    return None
+
+
+def follow_nodes(paths: list[str]) -> dict[str, Any]:
+    """Make the scene follow the agent: select the last node it touched and, when the Pi pane
+    is in a link group, point every pane tab in that group at it (network editors to its
+    parent network, parameter views to the node)."""
+    hou = _h()
+    nodes = [node for node in (hou.node(path) for path in paths) if node is not None]
+    if not nodes:
+        return {"followed": None, "panes": 0}
+    target = nodes[-1]
+    target.setSelected(True, clear_all_selected=True)
+
+    group = _pi_link_group(hou)
+    linked = group is not None and group not in (hou.paneLinkType.Pinned, hou.paneLinkType.FollowSelection)
+    panes = 0
+    if linked:
+        parent = target.parent() or target
+        for tab in hou.ui.paneTabs():
+            if tab.linkGroup() != group or tab.type() == hou.paneTabType.PythonPanel:
+                continue
+            if tab.type() == hou.paneTabType.NetworkEditor:
+                tab.setPwd(parent)
+                tab.setCurrentNode(target)
+                panes += 1
+            elif hasattr(tab, "setCurrentNode"):
+                tab.setCurrentNode(target)
+                panes += 1
+    return {"followed": target.path(), "panes": panes}

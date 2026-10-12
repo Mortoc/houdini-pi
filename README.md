@@ -51,6 +51,11 @@ is the package file pointing at it, for a home-manager `home.file` entry.
 - **Backup before the agent edits**: once per turn, before the first tool call
   that can change the scene, a Houdini backup is written
   (`hou.hipFile.saveAsBackup`, into `$HOUDINI_BACKUP_DIR`).
+- **Follow the agent**: the node a tool touched becomes the selection, so
+  panes set to *Last Selected Node* follow. Put the Pi tab and a network
+  editor or parameter view in the same **Link Pane Tab** group (1–9) and they
+  jump to the node's network and parameters as the agent works.
+  `{"followNodes": false}` in the settings file turns this off.
 - **Reference nodes**: drag nodes from the network editor onto the pane; they
   become chips that ride along with your next message.
 - **Each turn is one Ctrl-Z** in Houdini. The footer also offers "undo this

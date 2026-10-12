@@ -76,6 +76,7 @@ export async function main(argv = process.argv.slice(2)) {
     const extension = createHoudiniExtension({
       bridge,
       houdiniPort: cli.houdiniPort,
+      followNodes: () => settings.followNodes,
       onBackup: (report) => {
         if ("error" in report) hubRef?.broadcast({ type: "error", message: `backup before the turn failed: ${report.error}` });
       },

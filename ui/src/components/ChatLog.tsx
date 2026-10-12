@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import type { ClientMessage } from "@houdini-pi/protocol";
 import type { Entry, PaneState } from "../state.js";
+import { AnswerBlock } from "./AnswerBlock.js";
 import { CopyButton } from "./CopyButton.js";
 import { Markdown } from "./Markdown.js";
 import { ToolCard } from "./ToolCard.js";
@@ -8,11 +10,12 @@ interface Props {
   entries: Entry[];
   lastTurn: PaneState["lastTurn"];
   onUndoTurn: () => void;
+  send: (message: ClientMessage) => void;
 }
 
 const STICKY_PX = 48;
 
-export function ChatLog({ entries, lastTurn, onUndoTurn }: Props) {
+export function ChatLog({ entries, lastTurn, onUndoTurn, send }: Props) {
   const log = useRef<HTMLElement>(null);
   const [stuck, setStuck] = useState(true);
 
@@ -61,8 +64,17 @@ export function ChatLog({ entries, lastTurn, onUndoTurn }: Props) {
                 <pre>{entry.thinking}</pre>
               </details>
             )}
-            {entry.tools.map((tool) => <ToolCard key={tool.toolCallId} tool={tool} />)}
-            <Markdown text={entry.text} />
+            {entry.tools.map((tool) =>
+              tool.answer !== undefined ? <AnswerBlock key={tool.toolCallId} answer={tool.answer} send={send} /> : <ToolCard key={tool.toolCallId} tool={tool} />,
+            )}
+            {entry.tools.some((t) => t.answer !== undefined) && entry.text.trim().length > 0 ? (
+              <details className="narration" data-testid="narration">
+                <summary>unformatted reply</summary>
+                <Markdown text={entry.text} />
+              </details>
+            ) : (
+              <Markdown text={entry.text} />
+            )}
           </div>
         );
       })}

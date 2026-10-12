@@ -57,6 +57,9 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   jump to the node's network and parameters as the agent works.
   Selections are shown at least 500 ms apart so you can see each step.
   `{"followNodes": false}` in the settings file turns this off.
+- **Questions**: "how do I…" gets a Markdown answer with buttons that select
+  the node, show the parameter, jump to the network, open a pane or a help
+  page (`houdini://` links in the `present_answer` tool).
 - **No summaries**: the agent ends a turn silently; a green **Done** line (or
   the tool error count) tells you how it went.
 - **COP inspection**: `inspect_cop` renders a Copernicus node to a 256 px PNG
@@ -120,8 +123,10 @@ Manual checks on a real Houdini: [docs/manual-e2e.md](docs/manual-e2e.md).
 
 ## Troubleshooting
 
-- **Black pane**: a known QtWebEngine-in-DCC failure. Try
-  `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu houdini`.
+- **Black pane, or Houdini aborting when the GPU is full**: set
+  `"pane": {"softwareRender": true}` in the settings file (or
+  `HOUDINI_PI_SOFTWARE_RENDER=1`) to render the pane in software. Off by
+  default so scrolling stays GPU-smooth.
 - **"no Houdini bridge"**: the fxhoudinimcp plugin is not loaded or
   `FXHOUDINIMCP_AUTOSTART=0`. Check `~/houdini22.0/packages`.
 - **Login errors**: run `pi` in a terminal and `/login`, or export the

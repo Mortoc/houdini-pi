@@ -23,6 +23,30 @@ class SidecarError(RuntimeError):
     pass
 
 
+SETTINGS_FILE = Path.home() / ".houdini-pi" / "settings.json"
+
+
+def software_render_wanted(env: dict[str, str] | None = None, settings_file: Path = SETTINGS_FILE) -> bool:
+    """Off by default: the pane renders on the GPU like the rest of Houdini.
+
+    `HOUDINI_PI_SOFTWARE_RENDER=1`, or `{"pane": {"softwareRender": true}}` in
+    the settings file, moves it to software. A future resource-pressure
+    responder would flip this before opening the pane; it cannot change for a
+    view that already exists, because Qt fixes the scene graph API at the first
+    window.
+    """
+    env = os.environ if env is None else env
+    if env.get("HOUDINI_PI_SOFTWARE_RENDER") == "1":
+        return True
+    try:
+        settings = json.loads(settings_file.read_text())
+    except (OSError, ValueError):
+        return False
+    return bool(settings.get("pane", {}).get("softwareRender", False))
+
+
+
+
 def derive_port(pid: int) -> int:
     return PORT_BASE + (pid % PORT_SPAN)
 

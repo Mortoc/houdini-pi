@@ -15,6 +15,7 @@ import json
 from PySide6 import QtCore, QtWidgets
 
 from houdini_pi import drops, sidecar
+from houdini_pi.sidecar import software_render_wanted
 
 BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
 POLL_MS = 250
@@ -63,6 +64,8 @@ class AgentPane(QtWidgets.QStackedWidget):
             self._fail(f"sidecar did not answer on port {pending.port} within {GIVE_UP_AFTER_POLLS * POLL_MS // 1000}s.\n\nLog: {pending.log}\n\n{_tail(pending.log)}")
 
     def _show(self, url: str):
+        if software_render_wanted():
+            _keep_the_pane_off_the_gpu()
         try:
             from PySide6 import QtWebEngineWidgets
         except ImportError:
@@ -73,6 +76,30 @@ class AgentPane(QtWidgets.QStackedWidget):
         view.setUrl(QtCore.QUrl(url))
         self.addWidget(view)
         self.setCurrentWidget(view)
+
+
+def _keep_the_pane_off_the_gpu():
+    """Render the web view in software, so it never competes with COPs for the GPU.
+
+    QWebEngineView draws through a Qt Quick scene graph that wants its own GL
+    context. With the card full (Copernicus + a model server), that context
+    creation failed and Qt treated it as fatal: Houdini aborted in
+    QSGRenderLoop::handleContextCreationFailure on 2026-10-12. Software Quick
+    plus Chromium without GPU compositing takes the pane out of that contest,
+    at the cost of GPU-smooth scrolling. Both must be set before QtWebEngine
+    starts.
+    """
+    flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    for flag in ("--disable-gpu", "--disable-gpu-compositing"):
+        if flag not in flags:
+            flags = f"{flags} {flag}".strip()
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = flags
+    try:
+        from PySide6 import QtQuick
+
+        QtQuick.QQuickWindow.setGraphicsApi(QtQuick.QSGRendererInterface.GraphicsApi.Software)
+    except Exception as exc:  # already decided by an earlier Quick window; nothing to do about it now
+        print(f"[houdini-pi] could not select the software scene graph: {exc}")
 
 
 class DropForwarder(QtCore.QObject):

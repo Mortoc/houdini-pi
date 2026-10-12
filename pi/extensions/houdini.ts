@@ -12,6 +12,7 @@ import { BridgeUnreachable, HoudiniBridge } from "./bridge.js";
 import { mkdir, readFile, rename, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { actionLinks, ANSWER_NUDGE, isQuestion } from "./answers.js";
 import { FollowQueue } from "./follow-queue.js";
 import { Compactor, MemoryStore, type MemoryBridge } from "./memory.js";
 
@@ -195,6 +196,9 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   const argsByCall = new Map<string, unknown>();
   let copDirty = false;
   let nudges = 0;
+  let questionTurn = false;
+  let answered = false;
+  let answerNudges = 0;
   const followQueue = new FollowQueue<FollowReport>((paths) => bridge.runHelper<FollowReport>("follow_nodes", { paths }), options.followMinGapMs ?? 500);
 
   const assetsDir = options.assetsDir ?? DEFAULT_ASSETS_DIR;
@@ -252,6 +256,9 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       backedUpThisTurn = false;
       copDirty = false;
       nudges = 0;
+      questionTurn = isQuestion(event.prompt);
+      answered = false;
+      answerNudges = 0;
       return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText), display: false } };
     });
 
@@ -302,12 +309,55 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
     pi.on("agent_before_settle", async (event) => {
       await followQueue.idle();
       const must_look = copDirty && nudges < 2 && event.context.canContinue;
-      if (!must_look) return undefined;
-      nudges++;
-      return {
-        continue: true,
-        entries: [{ type: "custom_message", customType: "houdini-pi-nudge", content: COP_NUDGE, display: true }],
-      };
+      if (must_look) {
+        nudges++;
+        return {
+          continue: true,
+          entries: [{ type: "custom_message", customType: "houdini-pi-nudge", content: COP_NUDGE, display: true }],
+        };
+      }
+      const must_answer = questionTurn && !answered && answerNudges < 1 && event.context.canContinue;
+      if (must_answer) {
+        answerNudges++;
+        return {
+          continue: true,
+          entries: [{ type: "custom_message", customType: "houdini-pi-nudge", content: ANSWER_NUDGE, display: true }],
+        };
+      }
+      return undefined;
+    });
+
+    pi.registerTool({
+      name: "present_answer",
+      label: "Answer the artist",
+      description:
+        "Show the artist an answer or a tutorial. Markdown only; steps as a numbered list. Point at things with links: houdini://select?path=/obj/geo1, houdini://parm?path=/obj/geo1/wire1/radius, houdini://network?path=/obj/geo1, houdini://pane?type=Parm, houdini://help?page=/nodes/sop/polyextrude. This is the only way prose reaches the artist; use it for every question, and never narrate outside it.",
+      promptSnippet: "Show the artist a clean answer or tutorial with buttons",
+      promptGuidelines: ["Answer questions with present_answer, not plain text. Put a houdini:// link on every node, parameter, network or pane a step refers to."],
+      parameters: Type.Object({
+        markdown: Type.String({ description: "The answer, in Markdown, with houdini:// links" }),
+      }),
+      execute: async (_id, params) => {
+        const links = actionLinks(params.markdown);
+        const paths = links.filter((l) => l.kind === "select" || l.kind === "parm" || l.kind === "network").map((l) => l.value);
+        const invalid: Record<string, string> = {};
+        if (paths.length > 0) {
+          const { kinds } = await bridge.runHelper<{ kinds: Record<string, string | null> }>("validate_paths", { paths });
+          for (const link of links) {
+            const kind = kinds[link.value];
+            const wants_node = link.kind === "select" || link.kind === "network";
+            if (kind === null || kind === undefined) invalid[link.href] = `nothing at ${link.value}`;
+            else if (wants_node && kind !== "node") invalid[link.href] = `${link.value} is a parameter, not a node`;
+            else if (link.kind === "parm" && kind !== "parm") invalid[link.href] = `${link.value} is a node, not a parameter`;
+          }
+        }
+        answered = true;
+        const broken = Object.keys(invalid).length;
+        return {
+          content: [{ type: "text", text: broken === 0 ? "Answer shown to the artist." : `Answer shown. ${broken} link(s) point at nothing in the scene and were disabled: ${Object.values(invalid).join("; ")}` }],
+          details: { answer: { markdown: params.markdown, invalid } },
+        };
+      },
     });
 
     pi.registerTool({

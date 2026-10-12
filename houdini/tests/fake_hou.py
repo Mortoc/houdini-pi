@@ -38,6 +38,21 @@ class FakeParm:
             self.owner.on_execute(self.owner)
 
 
+class FakeParmObj:
+    def __init__(self, node, name: str):
+        self._node = node
+        self._name = name
+
+    def node(self):
+        return self._node
+
+    def name(self) -> str:
+        return self._name
+
+    def description(self) -> str:
+        return self._name.capitalize()
+
+
 class FakeNode:
     def __init__(self, path: str, type_name: str = "geo", parent: "FakeNode | None" = None, category: str = "Object"):
         self._path = path
@@ -52,6 +67,9 @@ class FakeNode:
 
     def name(self) -> str:
         return self._path.rsplit("/", 1)[-1]
+
+    def isNetwork(self) -> bool:  # noqa: N802
+        return self._type.name() in ("objnet", "copnet", "geo", "root")
 
     def parm(self, name: str) -> FakeParm:
         return self.parms.setdefault(name, FakeParm(self))
@@ -161,6 +179,7 @@ class FakePaneTabType:
     NetworkEditor = Enum("NetworkEditor")
     Parm = Enum("Parm")
     SceneViewer = Enum("SceneViewer")
+    HelpBrowser = Enum("HelpBrowser")
 
 
 class FakeInterface:
@@ -180,6 +199,14 @@ class FakePaneTab:
         self._interface = interface
         self.pwd = None
         self.current = None
+        self.raised = 0
+        self.help_paths: list[str] = []
+
+    def setIsCurrentTab(self):  # noqa: N802
+        self.raised += 1
+
+    def displayHelpPath(self, path: str):  # noqa: N802
+        self.help_paths.append(path)
 
     def type(self):
         return self._type
@@ -204,12 +231,33 @@ class FakeNodeTab(FakePaneTab):
         self.current = node
 
 
+class FakeDesktop:
+    def __init__(self, ui):
+        self.ui = ui
+
+    def createFloatingPaneTab(self, kind):  # noqa: N802
+        tab = FakeNodeTab(kind, FakePaneLinkType.Pinned)
+        self.ui.tabs.append(tab)
+        return tab
+
+
 class FakeUI:
     def __init__(self):
         self.tabs: list[FakePaneTab] = []
+        self.status: list[str] = []
 
     def paneTabs(self):  # noqa: N802
         return list(self.tabs)
+
+    def paneTabOfType(self, kind, index: int = 0):  # noqa: N802
+        matches = [t for t in self.tabs if t.type() == kind]
+        return matches[index] if len(matches) > index else None
+
+    def curDesktop(self):  # noqa: N802
+        return FakeDesktop(self)
+
+    def setStatusMessage(self, text: str, *a, **k):  # noqa: N802
+        self.status.append(text)
 
 
 class FakeHou:
@@ -235,6 +283,13 @@ class FakeHou:
 
     def node(self, path: str):
         return self.nodes.get(path)
+
+    def parm(self, path: str):
+        node_path, _, name = path.rpartition("/")
+        node = self.nodes.get(node_path)
+        if node is None or name not in getattr(node, "parm_names", ()):
+            return None
+        return FakeParmObj(node, name)
 
     def selectedNodes(self):  # noqa: N802
         return list(self.selected)

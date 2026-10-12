@@ -3,7 +3,7 @@
  * run against a fake and Task 8's adapter is the only file that imports pi.
  * Event shapes mirror pi's session events field for field.
  */
-import type { HistoryMessage, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { Answer, HistoryMessage, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 
 export type AssistantStreamEvent =
   | { type: "text_delta"; delta: string }
@@ -15,7 +15,7 @@ export type AgentEvent =
   | { type: "message_update"; assistantMessageEvent: AssistantStreamEvent }
   | { type: "message_end"; message: { role: string; text: string } }
   | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean; durationMs: number; imageUrl?: string }
+  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean; durationMs: number; imageUrl?: string; answer?: Answer }
   | { type: "turn_end"; turnIndex: number }
   | { type: "agent_settled"; aborted: boolean }
   | { type: "model_changed" };

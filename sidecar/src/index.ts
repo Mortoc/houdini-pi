@@ -50,6 +50,7 @@ function fakeHoudini(): HoudiniPort {
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
     loadHip: async () => {},
+    action: async () => {},
     linkGroup: async () => link,
     setLinkGroup: async (group) => { link = group; },
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),

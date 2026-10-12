@@ -86,6 +86,7 @@ export function App() {
           <ChatLog
             entries={state.entries}
             lastTurn={state.lastTurn}
+            send={send}
             onUndoTurn={() => {
               // Revert the whole turn in Houdini (it is one undo group), drop it
               // from the log, and hand the message back to the artist to edit.

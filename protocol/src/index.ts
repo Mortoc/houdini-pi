@@ -32,6 +32,14 @@ export interface SessionRef {
 /** Houdini's Link Pane Tab choices: "none" (Pinned), "1".."9", or "selection" (Last Selected Node). */
 export type LinkGroup = "none" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "selection";
 
+export type HoudiniActionKind = "select" | "parm" | "network" | "pane" | "help";
+
+/** An answer the artist reads: Markdown whose houdini:// links the pane renders as buttons; `invalid` maps a link href to why it is disabled. */
+export interface Answer {
+  markdown: string;
+  invalid: Record<string, string>;
+}
+
 export interface ImageAttachment {
   mimeType: string;
   data: string;
@@ -55,6 +63,7 @@ export type ClientMessage =
   | { type: "undo_compaction" }
   | { type: "rename_session"; name: string }
   | { type: "set_link_group"; group: LinkGroup }
+  | { type: "houdini_action"; kind: HoudiniActionKind; value: string }
   | { type: "undo_turn" };
 
 export interface HelloState {
@@ -78,7 +87,7 @@ export type ServerMessage =
   | { type: "thinking_delta"; delta: string }
   | { type: "message_end"; role: "assistant"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; imageUrl?: string }
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; imageUrl?: string; answer?: Answer }
   | { type: "turn_end"; turnIndex: number }
   | { type: "settled"; aborted: boolean; cost: number; durationMs: number }
   | { type: "models"; models: ModelRef[] }
@@ -96,6 +105,7 @@ export interface HistoryTool {
   isError?: boolean;
   /** Where the pane loads the result image: a /session-assets/… path on the sidecar, or a data: URL. */
   imageUrl?: string;
+  answer?: Answer;
 }
 
 export interface HistoryMessage {
@@ -122,6 +132,7 @@ const CLIENT_TYPES: Record<ClientMessage["type"], readonly string[]> = {
   undo_compaction: [],
   rename_session: ["name"],
   set_link_group: ["group"],
+  houdini_action: ["kind", "value"],
   undo_turn: [],
 };
 

@@ -1,4 +1,4 @@
-import { type ClientMessage, type LinkGroup, type ServerMessage, decodeClient, encode, ProtocolError } from "@houdini-pi/protocol";
+import { type ClientMessage, type HoudiniActionKind, type LinkGroup, type ServerMessage, decodeClient, encode, ProtocolError } from "@houdini-pi/protocol";
 import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
@@ -10,6 +10,8 @@ export interface HoudiniPort {
   hipPath(): Promise<string | undefined>;
   /** Open a hip in Houdini. Rejects when the current scene has unsaved changes. */
   loadHip(path: string): Promise<void>;
+  /** One answer-button action in Houdini. */
+  action(kind: HoudiniActionKind, value: string): Promise<void>;
   linkGroup(): Promise<LinkGroup | undefined>;
   setLinkGroup(group: LinkGroup): Promise<void>;
   memoryRead(): Promise<{ text: string; prevAvailable: boolean }>;
@@ -125,6 +127,7 @@ export class SessionHub {
           isError: event.isError,
           durationMs: event.durationMs,
           ...(event.imageUrl ? { imageUrl: event.imageUrl } : {}),
+          ...(event.answer ? { answer: event.answer } : {}),
         });
         return;
       case "turn_end":
@@ -236,6 +239,9 @@ export class SessionHub {
       case "undo_compaction":
         await this.houdini.memoryRollback();
         this.broadcast({ type: "memory", ...(await this.houdini.memoryRead()) });
+        return;
+      case "houdini_action":
+        await this.houdini.action(message.kind, message.value);
         return;
       case "set_link_group":
         await this.houdini.setLinkGroup(message.group);

@@ -49,10 +49,19 @@ export class FakeAgent implements AgentLike {
     this.history.push({ role: "user", text });
     this.isStreaming = true;
     this.aborted = false;
-    const reply = `I would make the wires thinner for "${text}".`;
+    const is_question = /^(how|what|why)\b|\?\s*$/i.test(text.trim());
+    const reply = is_question ? "Here is how." : `I would make the wires thinner for "${text}".`;
+    const answer = "1. Select [the wire](houdini://select?path=/obj/geo1/wire1).\n2. Open its [radius](houdini://parm?path=/obj/geo1/wire1/radius) and set it to 0.01.\n3. If it is gone, see [polyextrude help](houdini://help?page=/nodes/sop/polyextrude). Missing: [ghost](houdini://select?path=/obj/nope).";
     const run = async () => {
       this.emit({ type: "agent_start" });
-      const steps: AgentEvent[] = [
+      const steps: AgentEvent[] = is_question ? [
+        { type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "Figuring out the steps…" } },
+        { type: "tool_execution_start", toolCallId: "ans-1", toolName: "present_answer", args: { markdown: answer } },
+        { type: "tool_execution_end", toolCallId: "ans-1", toolName: "present_answer", result: "Answer shown.", isError: false, durationMs: 5, answer: { markdown: answer, invalid: { "houdini://select?path=/obj/nope": "nothing at /obj/nope" } } },
+        { type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Let me know if the wire is not where I think it is, I can also " } },
+        { type: "message_end", message: { role: "assistant", text: reply } },
+        { type: "turn_end", turnIndex: this.turns++ },
+      ] : [
         { type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "Looking at the selected nodes…" } },
         { type: "tool_execution_start", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", args: { node_path: "/obj/geo1/wire1", parm_name: "radius", value: 0.01 } },
         { type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", result: { ok: true }, isError: false, durationMs: 12 },
@@ -72,7 +81,7 @@ export class FakeAgent implements AgentLike {
         if (event.type === "tool_execution_start") tools.push({ toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
         if (event.type === "tool_execution_end") {
           const tool = tools.find((t) => t.toolCallId === event.toolCallId);
-          if (tool) Object.assign(tool, { result: typeof event.result === "string" ? event.result : JSON.stringify(event.result), isError: event.isError, ...(event.imageUrl ? { imageUrl: event.imageUrl } : {}) });
+          if (tool) Object.assign(tool, { result: typeof event.result === "string" ? event.result : JSON.stringify(event.result), isError: event.isError, ...(event.imageUrl ? { imageUrl: event.imageUrl } : {}), ...(event.answer ? { answer: event.answer } : {}) });
         }
       }
       if (!this.aborted) this.history.push({ role: "assistant", text: reply, tools });

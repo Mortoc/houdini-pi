@@ -20,7 +20,7 @@ class FakeSocket implements SocketLike {
   }
 }
 
-type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number; link: string; loaded: string[] };
+type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number; link: string; loaded: string[]; actions: string[] };
 
 function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
   const port: FakeHoudini = {
@@ -29,8 +29,10 @@ function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
     undos: 0,
     link: "none",
     loaded: [] as string[],
+    actions: [] as string[],
     hipPath: async () => "/scenes/test.hip",
     loadHip: async (path: string) => { port.loaded.push(path); },
+    action: async (kind: string, value: string) => { port.actions.push(`${kind}:${value}`); },
     linkGroup: async () => port.link as "none",
     setLinkGroup: async (group) => { port.link = group; },
     memoryRead: async () => ({ text: port.memory, prevAvailable: port.prev !== undefined }),
@@ -201,6 +203,22 @@ describe("SessionHub", () => {
     socket.emit("message", encode({ type: "switch_session", sessionPath: "/sessions/same.jsonl" }));
     await settle();
     expect(houdini.loaded).toEqual(["/scenes/other.hip"]);
+  });
+
+  it("relays answers to the pane and button actions to Houdini", async () => {
+    const houdini = fakeHoudini();
+    const hub = new SessionHub(new FakeAgent(0), houdini);
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "prompt", text: "How do I thin the wires?" }));
+    await socket.waitFor("settled");
+    const answer = socket.received.find((m) => m.type === "tool_end" && m.toolName === "present_answer") as { answer?: { markdown: string; invalid: Record<string, string> } };
+    expect(answer.answer?.markdown).toContain("houdini://parm?path=/obj/geo1/wire1/radius");
+    expect(answer.answer?.invalid).toEqual({ "houdini://select?path=/obj/nope": "nothing at /obj/nope" });
+    socket.emit("message", encode({ type: "houdini_action", kind: "parm", value: "/obj/geo1/wire1/radius" }));
+    await settle();
+    expect(houdini.actions).toEqual(["parm:/obj/geo1/wire1/radius"]);
   });
 
   it("answers a malformed message with an error and keeps serving", async () => {

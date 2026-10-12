@@ -113,3 +113,14 @@ Each entry: decision, options weighed, why. Review in the morning.
 31. **"Still defaults to Kimi" was a stale sidecar**, not the picker: a fresh
     sidecar against the live bridge reports `deepseek/deepseek-v4-flash-vision-exp`
     on start and after New Conversation. The sidecar only restarts with Houdini.
+32. **The pane renders in software** (`QQuickWindow.setGraphicsApi(Software)` +
+    Chromium `--disable-gpu --disable-gpu-compositing`). Houdini aborted at
+    17:15:49 in `QSGRenderLoop::handleContextCreationFailure` via PySide6's
+    QtQuick, which only our QWebEngineView loads: with the GPU full, the web
+    view's scene graph could not get a GL context and Qt treats that as fatal.
+    A chat pane has no business on the GPU next to Copernicus.
+33. **Software rendering of the pane is a setting, off by default** (Mortoc:
+    everything should feel as good as possible). `pane.softwareRender` or
+    `HOUDINI_PI_SOFTWARE_RENDER=1`. A future resource-pressure responder could
+    turn it on before the pane opens; Qt fixes the scene-graph API at the first
+    window, so it cannot change for a pane that is already up.

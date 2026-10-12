@@ -15,6 +15,7 @@ import json
 from PySide6 import QtCore, QtWidgets
 
 from houdini_pi import drops, sidecar
+from houdini_pi.sidecar import software_render_wanted
 
 BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
 POLL_MS = 250
@@ -63,7 +64,8 @@ class AgentPane(QtWidgets.QStackedWidget):
             self._fail(f"sidecar did not answer on port {pending.port} within {GIVE_UP_AFTER_POLLS * POLL_MS // 1000}s.\n\nLog: {pending.log}\n\n{_tail(pending.log)}")
 
     def _show(self, url: str):
-        _keep_the_pane_off_the_gpu()
+        if software_render_wanted():
+            _keep_the_pane_off_the_gpu()
         try:
             from PySide6 import QtWebEngineWidgets
         except ImportError:
@@ -82,9 +84,10 @@ def _keep_the_pane_off_the_gpu():
     QWebEngineView draws through a Qt Quick scene graph that wants its own GL
     context. With the card full (Copernicus + a model server), that context
     creation failed and Qt treated it as fatal: Houdini aborted in
-    QSGRenderLoop::handleContextCreationFailure on 2026-10-12. A chat pane does
-    not need the GPU; software Quick plus Chromium without GPU compositing
-    takes it out of that contest. Both must be set before QtWebEngine starts.
+    QSGRenderLoop::handleContextCreationFailure on 2026-10-12. Software Quick
+    plus Chromium without GPU compositing takes the pane out of that contest,
+    at the cost of GPU-smooth scrolling. Both must be set before QtWebEngine
+    starts.
     """
     flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
     for flag in ("--disable-gpu", "--disable-gpu-compositing"):

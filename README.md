@@ -123,8 +123,10 @@ Manual checks on a real Houdini: [docs/manual-e2e.md](docs/manual-e2e.md).
 
 ## Troubleshooting
 
-- **Black pane**: a known QtWebEngine-in-DCC failure. Try
-  `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu houdini`.
+- **Black pane, or Houdini aborting when the GPU is full**: set
+  `"pane": {"softwareRender": true}` in the settings file (or
+  `HOUDINI_PI_SOFTWARE_RENDER=1`) to render the pane in software. Off by
+  default so scrolling stays GPU-smooth.
 - **"no Houdini bridge"**: the fxhoudinimcp plugin is not loaded or
   `FXHOUDINIMCP_AUTOSTART=0`. Check `~/houdini22.0/packages`.
 - **Login errors**: run `pi` in a terminal and `/login`, or export the

@@ -119,3 +119,8 @@ Each entry: decision, options weighed, why. Review in the morning.
     QtQuick, which only our QWebEngineView loads: with the GPU full, the web
     view's scene graph could not get a GL context and Qt treats that as fatal.
     A chat pane has no business on the GPU next to Copernicus.
+33. **Software rendering of the pane is a setting, off by default** (Mortoc:
+    everything should feel as good as possible). `pane.softwareRender` or
+    `HOUDINI_PI_SOFTWARE_RENDER=1`. A future resource-pressure responder could
+    turn it on before the pane opens; Qt fixes the scene-graph API at the first
+    window, so it cannot change for a pane that is already up.

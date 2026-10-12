@@ -107,3 +107,9 @@ Each entry: decision, options weighed, why. Review in the morning.
 29. **File ▸ Open does not restart Houdini**, but it rebuilds the desktop, so the
     pane reconnects on the new hip: the hub notices the hip change and starts a
     new conversation unless the current one is already tagged with that hip.
+30. **The scene agent loads no MCP servers from `~/.pi/agent/mcp.json`.** A probe
+    showed the sidecar pulling in the user's Notion MCP; only `fxhoudini`
+    (registered by the extension) belongs in Houdini's tool set.
+31. **"Still defaults to Kimi" was a stale sidecar**, not the picker: a fresh
+    sidecar against the live bridge reports `deepseek/deepseek-v4-flash-vision-exp`
+    on start and after New Conversation. The sidecar only restarts with Houdini.

@@ -66,7 +66,14 @@ export class PiAgent implements AgentLike {
         cwd,
         agentDir,
         resourceLoaderOptions: {
-          extensionFactories: [createCodemodeExtension({ mode: "on" }), createToolSearchExtension(), createMcpExtension(), ...options.extensions],
+          extensionFactories: [
+            createCodemodeExtension({ mode: "on" }),
+            createToolSearchExtension(),
+            // Only the servers our extension registers (fxhoudini): the user's
+            // ~/.pi/agent/mcp.json is for their terminal pi, not the scene agent.
+            createMcpExtension({ loadConfig: () => ({ servers: [], errors: [] }) }),
+            ...options.extensions,
+          ],
         },
       });
       const created = await createAgentSessionFromServices({

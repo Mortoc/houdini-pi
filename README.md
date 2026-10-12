@@ -34,8 +34,8 @@ cd ~/houdini-pi && ./install
 
 `./install` checks the dependencies above, runs `npm ci && npm run build`, and
 writes `$HOUDINI_USER_PREF_DIR/packages/houdini_pi.json`. `./install --uninstall`
-removes that file. Then in Houdini: **Windows ▸ Squatch Studios ▸ Pi**, or add a **Pi** tab to
-any pane (New Tab ▸ Python Panel ▸ Pi) like the Geometry Spreadsheet.
+removes that file. Then in Houdini: **Windows ▸ Squatch Studios ▸ Houdini Agent**, or add a **Houdini Agent** tab to
+any pane (New Pane Tab Type ▸ Houdini Agent) like the Geometry Spreadsheet.
 
 NixOS: `nix build .#houdini-pi` builds the plugin; `.#houdini-pi-package-json`
 is the package file pointing at it, for a home-manager `home.file` entry.

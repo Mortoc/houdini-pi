@@ -6,7 +6,7 @@
         <label>Squatch Studios</label>
         <insertBefore>h.pane</insertBefore>
         <scriptItem id="houdini_pi_open">
-          <label>Pi</label>
+          <label>Houdini Agent</label>
           <scriptCode><![CDATA[
 import houdini_pi.panel
 houdini_pi.panel.open_pane()

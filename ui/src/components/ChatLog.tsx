@@ -33,7 +33,7 @@ export function ChatLog({ entries, lastTurn, onUndoTurn }: Props) {
     <main className="chat" data-testid="chat" data-stuck={stuck} ref={log} onScroll={onScroll}>
       {entries.length === 0 && (
         <section className="welcome" data-testid="welcome">
-          <h2>Pi</h2>
+          <h2>Houdini Agent</h2>
           <p>Describe a change to this scene. The agent edits it through Houdini's own tools, one undo step per turn.</p>
           <ul>
             <li>Drag nodes from a network editor onto this pane to talk about them.</li>

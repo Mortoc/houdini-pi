@@ -53,8 +53,8 @@ export function PromptBox({ streaming, connected, send, nodes, onNodesChange }: 
       </div>
       <div className="prompt-actions">
         {streaming && (
-          <button type="button" className="abort" data-testid="abort" onClick={() => send({ type: "abort" })}>
-            abort
+          <button type="button" className="stop" data-testid="abort" onClick={() => send({ type: "abort" })}>
+            stop
           </button>
         )}
         <button type="submit" data-testid="send" disabled={!connected}>

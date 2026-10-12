@@ -23,7 +23,8 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 .tabs button { background: #1a1a1d; border: 1px solid #333; border-bottom: none; color: var(--muted); padding: 3px 12px; cursor: pointer; border-radius: 5px 5px 0 0; font-size: 12px; }
 .tabs button[aria-selected="true"] { color: var(--fg); background: var(--bg); border-color: #555; box-shadow: inset 0 2px 0 var(--accent); }
 .toolbar select, .toolbar button.new-session, .model-current { background: #333; color: var(--fg); border: 1px solid #444; border-radius: 4px; padding: 3px 8px; font: inherit; cursor: pointer; }
-.toolbar button.new-session { background: #2d3d2f; border-color: #3f6b45; }
+.toolbar button.new-session { background: transparent; color: #7ed49a; border-color: #3f6b45; }
+.toolbar button.new-session:hover { background: color-mix(in srgb, #7ed49a 12%, transparent); }
 .status { font-size: 11px; color: var(--muted); }
 .status-closed { color: var(--error); }
 .model-picker { position: relative; }
@@ -92,8 +93,10 @@ button.link { background: none; border: none; color: var(--accent); cursor: poin
 .chip button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 12px; }
 .prompt textarea { flex: 1; resize: none; background: #141416; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 6px; font: inherit; }
 .prompt-actions { display: flex; flex-direction: column; gap: 4px; }
-.prompt button { background: var(--accent); color: #000; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-weight: 600; }
-.prompt button.abort { background: var(--error); color: #fff; }
+.prompt button { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-weight: 600; }
+.prompt button:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.prompt button.stop { color: #ff7b6b; border-color: #ff7b6b; }
+.prompt button.stop:hover { background: color-mix(in srgb, #ff7b6b 15%, transparent); }
 .prompt button:disabled { opacity: 0.4; cursor: default; }
 .memory { padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .memory textarea { flex: 1; background: #141416; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 8px; font-family: ui-monospace, monospace; }

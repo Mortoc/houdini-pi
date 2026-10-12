@@ -29,6 +29,7 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
 4. In a Copernicus network, renders the output and looks at it before
    finishing. You see the thumbnail; click to expand.
 5. Ends with a green **Done**, or the count of tool errors. No summaries.
+   **stop** halts the turn; **steer** sends a message into the running turn.
 
 ## Tool cards
 

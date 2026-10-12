@@ -109,6 +109,7 @@ test("abort while streaming marks the turn aborted", async ({ page }) => {
   await page.getByTestId("prompt").fill("go slow");
   await page.getByTestId("prompt").press("Enter");
   await expect(page.getByTestId("assistant-bubble").last().getByTestId("tool-card").first()).toBeVisible();
+  await expect(page.getByTestId("abort")).toHaveText("stop");
   await page.getByTestId("abort").click();
   await expect(page.getByTestId("turn-footer")).toContainText("Aborted");
   await expect(page.getByTestId("send")).toHaveText("send");

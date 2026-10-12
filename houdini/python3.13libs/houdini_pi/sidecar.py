@@ -41,10 +41,17 @@ def sidecar_entry(root: Path) -> Path:
     return entry
 
 
-def find_node(which: Callable[[str], str | None] = shutil.which) -> str:
+def find_node(which: Callable[[str], str | None] = shutil.which, env: dict[str, str] | None = None) -> str:
+    """The installer records the Node it validated in HOUDINI_PI_NODE (via the package JSON),
+    because Houdini's own PATH rarely has a new enough node, or any node at all."""
+    pinned = (env if env is not None else os.environ).get("HOUDINI_PI_NODE")
+    if pinned:
+        if not Path(pinned).exists():
+            raise SidecarError(f"HOUDINI_PI_NODE={pinned} does not exist; re-run ./install.")
+        return pinned
     node = which("node")
     if node is None:
-        raise SidecarError("node is not on PATH. houdini-pi needs Node 22.19 or newer.")
+        raise SidecarError("node is not on PATH and HOUDINI_PI_NODE is unset. Re-run ./install, which records the Node it finds.")
     return node
 
 

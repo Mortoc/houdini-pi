@@ -20,7 +20,12 @@ def test_probe_health_only_accepts_our_sidecar():
 
 def test_missing_node_and_unbuilt_sidecar_are_named(tmp_path: Path):
     with pytest.raises(sidecar.SidecarError, match="node is not on PATH"):
-        sidecar.find_node(lambda name: None)
+        sidecar.find_node(lambda name: None, env={})
+    with pytest.raises(sidecar.SidecarError, match="does not exist"):
+        sidecar.find_node(lambda name: None, env={"HOUDINI_PI_NODE": str(tmp_path / "nope")})
+    pinned = tmp_path / "node"
+    pinned.write_text("")
+    assert sidecar.find_node(lambda name: None, env={"HOUDINI_PI_NODE": str(pinned)}) == str(pinned)
     with pytest.raises(sidecar.SidecarError, match="sidecar is not built"):
         sidecar.sidecar_entry(tmp_path)
 

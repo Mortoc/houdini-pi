@@ -150,4 +150,49 @@ def follow_nodes(paths: list[str]) -> dict[str, Any]:
             elif hasattr(tab, "setCurrentNode"):
                 tab.setCurrentNode(target)
                 panes += 1
-    return {"followed": target.path(), "panes": panes}
+    categories = {node.path(): node.type().category().name() for node in nodes}
+    return {"followed": target.path(), "panes": panes, "categories": categories}
+
+
+PREVIEW_DIR_NAME = ".houdini-pi/previews"
+PREVIEW_ROP = "houdini_pi_preview"
+
+
+def render_cop(node_path: str, max_size: int = 1024) -> dict[str, Any]:
+    """Render a Copernicus node to a PNG through a temporary File Output (rop_image) COP.
+
+    The ROP is created beside the node, pointed at it with `coppath`, executed
+    for the current frame and destroyed again, so the network is left as it
+    was. Colour management is the ROP's default, which is what the viewer shows.
+    """
+    from pathlib import Path
+
+    hou = _h()
+    node = hou.node(node_path)
+    if node is None:
+        raise ValueError(f"no node at {node_path}")
+    is_cop = node.type().category().name() == "Cop"
+    if not is_cop:
+        raise ValueError(f"{node_path} is a {node.type().category().name()} node, not a Copernicus (Cop) node")
+    out_dir = Path.home() / PREVIEW_DIR_NAME
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = f"{node.name()}_{int(hou.frame())}"
+    out = out_dir / f"{stamp}.png"
+    if out.exists():
+        out.unlink()
+    parent = node.parent()
+    rop = parent.createNode("rop_image", PREVIEW_ROP)
+    try:
+        rop.parm("coppath").set(node.path())
+        rop.parm("copoutput").set(str(out))
+        rop.parm("trange").set(0)
+        if max_size:
+            rop.parm("setres").set(1)
+            rop.parmTuple("res").set((max_size, max_size))
+        rop.parm("execute").pressButton()
+    finally:
+        rop.destroy()
+    if not out.exists():
+        errors = node.errors() if hasattr(node, "errors") else ()
+        raise RuntimeError(f"rendering {node_path} produced no file at {out}; node errors: {list(errors)}")
+    return {"path": str(out), "node": node.path(), "frame": hou.frame()}

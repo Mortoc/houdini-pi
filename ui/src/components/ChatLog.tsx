@@ -43,8 +43,9 @@ export function ChatLog({ entries, lastTurn, streaming, send }: Props) {
         );
       })}
       {lastTurn !== undefined && (
-        <footer className="turn-footer" data-testid="turn-footer">
-          {lastTurn.aborted ? "aborted" : "done"} · {(lastTurn.durationMs / 1000).toFixed(1)}s · ${lastTurn.cost.toFixed(4)} ·{" "}
+        <footer className={`turn-footer ${lastTurn.aborted ? "aborted" : lastTurn.errors > 0 ? "with-errors" : "ok"}`} data-testid="turn-footer">
+          <span className="verdict">{lastTurn.aborted ? "Aborted" : lastTurn.errors > 0 ? `Done, ${lastTurn.errors} tool error${lastTurn.errors === 1 ? "" : "s"}` : "✓ Done"}</span>
+          <span className="meta">{(lastTurn.durationMs / 1000).toFixed(1)}s · ${lastTurn.cost.toFixed(4)}</span>
           <button className="link" onClick={() => send({ type: "undo_turn" })}>undo this turn in Houdini</button>
         </footer>
       )}

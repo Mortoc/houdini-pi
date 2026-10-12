@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canModifyScene, contextBlock, nodePathsFrom, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
+import { canModifyScene, contextBlock, COP_NUDGE, nodePathsFrom, createHoudiniExtension, DIRECT_TOOLS, mcpServerConfig, uvxCommand, type HoudiniExtensionBridge, type SceneContext } from "../extensions/houdini.js";
 
 type Handler = (event: any, ctx: any) => any;
 
@@ -32,6 +32,8 @@ class FakeBridge implements HoudiniExtensionBridge {
   executed: string[] = [];
   backups = 0;
   followed: string[][] = [];
+  renders: string[] = [];
+  renderFile = "/nonexistent.png";
   memory = "## Conventions\n\n- metres\n";
   prev: string | null = null;
   up = true;
@@ -47,7 +49,16 @@ class FakeBridge implements HoudiniExtensionBridge {
       case "begin_turn": if (this.failBeginTurn) throw new Error("hou exploded"); return undefined as T;
       case "end_turn": return undefined as T;
       case "backup_scene": this.backups++; return { path: `/bak/${this.backups}.hip` } as T;
-      case "follow_nodes": this.followed.push(kwargs["paths"] as string[]); return { followed: (kwargs["paths"] as string[]).at(-1), panes: 1 } as T;
+      case "follow_nodes": {
+        const paths = kwargs["paths"] as string[];
+        this.followed.push(paths);
+        const categories = Object.fromEntries(paths.map((p) => [p, p.includes("copnet") ? "Cop" : "Object"]));
+        return { followed: paths.at(-1), panes: 1, categories } as T;
+      }
+      case "render_cop": {
+        this.renders.push(kwargs["node_path"] as string);
+        return { path: this.renderFile, node: kwargs["node_path"], frame: 1 } as T;
+      }
     }
     throw new Error(`unexpected helper ${name}`);
   }
@@ -56,9 +67,11 @@ class FakeBridge implements HoudiniExtensionBridge {
 
 function load(bridge: FakeBridge, extra: Partial<Parameters<typeof createHoudiniExtension>[0]> = {}) {
   const pi = new FakeExtensionAPI();
-  createHoudiniExtension({ bridge, houdiniPort: 8103, ...extra })(pi as any);
+  createHoudiniExtension({ bridge, houdiniPort: 8103, followMinGapMs: 0, ...extra })(pi as any);
   return pi;
 }
+
+const flush = () => new Promise((r) => setTimeout(r, 5));
 
 describe("houdini extension", () => {
   it("registers fxhoudini as an MCP server on the given Houdini port with curated direct tools", () => {
@@ -174,12 +187,66 @@ describe("houdini extension", () => {
     await call("3", "mcp__fxhoudini__get_scene_info", {}, "{}");
     await call("4", "mcp__fxhoudini__delete_node", { node_path: "/obj/x" }, "boom", true);
     await call("5", "read", { path: "/etc/hosts" }, "");
+    await flush();
     expect(bridge.followed).toEqual([["/obj/geo1"], ["/obj", "/obj/envlight1"]]);
     const quiet = new FakeBridge();
     const off = load(quiet, { followNodes: () => false });
     await off.fire("tool_execution_start", { toolCallId: "6", toolName: "mcp__fxhoudini__get_node_card", args: { node_path: "/obj/geo1" } });
     await off.fire("tool_execution_end", { toolCallId: "6", toolName: "mcp__fxhoudini__get_node_card", result: "{}", isError: false });
+    await flush();
     expect(quiet.followed).toEqual([]);
+  });
+
+  it("spaces follow calls by the configured gap", async () => {
+    const bridge = new FakeBridge();
+    const pi = load(bridge, { followMinGapMs: 30 });
+    const started = Date.now();
+    for (const id of ["1", "2", "3"]) {
+      await pi.fire("tool_execution_start", { toolCallId: id, toolName: "mcp__fxhoudini__get_node_card", args: { node_path: `/obj/n${id}` } });
+      await pi.fire("tool_execution_end", { toolCallId: id, toolName: "mcp__fxhoudini__get_node_card", result: "{}", isError: false });
+    }
+    await pi.fire("agent_before_settle", { context: { canContinue: true }, entries: [], continue: false });
+    expect(bridge.followed).toEqual([["/obj/n1"], ["/obj/n2"], ["/obj/n3"]]);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(55);
+  });
+
+  it("nudges the agent to inspect a COP network it changed, at most twice, until it does", async () => {
+    const bridge = new FakeBridge();
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const png = join(mkdtempSync(join(tmpdir(), "houdini-pi-png-")), "out.png");
+    writeFileSync(png, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    bridge.renderFile = png;
+    const pi = load(bridge);
+    const settle = () => pi.fire("agent_before_settle", { context: { canContinue: true }, entries: [], continue: false });
+    const modify = async (id: string, toolName: string, args: unknown) => {
+      await pi.fire("tool_execution_start", { toolCallId: id, toolName, args });
+      await pi.fire("tool_execution_end", { toolCallId: id, toolName, result: "{}", isError: false });
+    };
+
+    await pi.fire("before_agent_start", { prompt: "x", systemPromptOptions: {} });
+    await modify("1", "mcp__fxhoudini__set_parameter", { node_path: "/obj/geo1" });
+    expect((await settle())[0]).toBeUndefined();
+
+    await modify("2", "mcp__fxhoudini__create_node", { parent_path: "/obj/hex_copnet" });
+    const [nudge] = await settle();
+    expect(nudge).toEqual({ continue: true, entries: [{ type: "custom_message", customType: "houdini-pi-nudge", content: COP_NUDGE, display: true }] });
+    expect((await settle())[0]).toMatchObject({ continue: true });
+    expect((await settle())[0]).toBeUndefined();
+
+    await modify("3", "mcp__fxhoudini__set_parameter", { node_path: "/obj/hex_copnet/blend" });
+    const result = await pi.tools.get("inspect_cop").execute("c", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, {});
+    expect(bridge.renders).toEqual(["/obj/hex_copnet/color_out"]);
+    expect(result.content[0]).toEqual({ type: "image", data: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"), mimeType: "image/png" });
+    expect(result.content[1].text).toContain("Rendered /obj/hex_copnet/color_out");
+    await pi.fire("before_agent_start", { prompt: "y", systemPromptOptions: {} });
+    await modify("4", "mcp__fxhoudini__set_parameter", { node_path: "/obj/hex_copnet/blend" });
+    await pi.tools.get("inspect_cop").execute("d", { node_path: "/obj/hex_copnet/color_out" }, undefined, undefined, {});
+    expect((await settle())[0]).toBeUndefined();
+
+    await modify("5", "mcp__fxhoudini__get_cop_info", { node_path: "/obj/hex_copnet/color_out" });
+    expect((await settle())[0]).toBeUndefined();
   });
 
   it("exposes memory tools that write through the bridge", async () => {

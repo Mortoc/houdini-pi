@@ -141,6 +141,21 @@ describe("SessionHub", () => {
     expect(houdini.undos).toBe(1);
   });
 
+  it("offers only vision models and passes tool images through", async () => {
+    const hub = new SessionHub(new FakeAgent(0), fakeHoudini());
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "list_models" }));
+    await socket.waitFor("models");
+    const models = socket.received.find((m) => m.type === "models") as { models: { id: string }[] };
+    expect(models.models.map((m) => m.id)).toEqual(["fake-fast", "fake-deep"]);
+    socket.emit("message", encode({ type: "prompt", text: "look" }));
+    await socket.waitFor("settled");
+    const inspect = socket.received.find((m) => m.type === "tool_end" && m.toolName === "inspect_cop") as { image?: { mimeType: string } };
+    expect(inspect.image?.mimeType).toBe("image/png");
+  });
+
   it("answers a malformed message with an error and keeps serving", async () => {
     const hub = new SessionHub(new FakeAgent(0), fakeHoudini());
     const socket = new FakeSocket();

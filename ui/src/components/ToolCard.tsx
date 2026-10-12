@@ -21,17 +21,18 @@ export function scriptOf(tool: ToolCall): { code: string; language: "python" | "
 }
 
 export function ToolCard({ tool }: { tool: ToolCall }) {
-  const label = tool.toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
+  const label = tool.toolName === "inspect_cop" ? "inspect COP" : tool.toolName.replace(/^mcp__fxhoudini__/, "houdini: ");
   const summary = houdiniSummary(tool);
   const pending = tool.result === undefined;
   const script = scriptOf(tool);
   return (
-    <details className={`tool${tool.isError ? " error" : ""}${pending ? " pending" : ""}`} data-testid="tool-card" open={script !== undefined}>
+    <details className={`tool${tool.isError ? " error" : ""}${pending ? " pending" : ""}`} data-testid="tool-card" open={script !== undefined || tool.image !== undefined}>
       <summary>
         <span className="tool-name">{label}</span>
         {summary && <span className="tool-summary">{summary}</span>}
         <span className="tool-status">{pending ? "…" : tool.isError ? "error" : `${tool.durationMs} ms`}</span>
       </summary>
+      {tool.image !== undefined && <img className="tool-image" data-testid="tool-image" alt={`${label} result`} src={`data:${tool.image.mimeType};base64,${tool.image.data}`} />}
       {script !== undefined && <CodeBlock code={script.code} language={script.language} />}
       {script === undefined && <pre className="tool-args">{JSON.stringify(tool.args, null, 2)}</pre>}
       {!pending && <pre className="tool-result">{tool.result}</pre>}

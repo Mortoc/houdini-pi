@@ -9,6 +9,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { BridgeUnreachable, HoudiniBridge } from "./bridge.js";
+import { readFile } from "node:fs/promises";
+import { FollowQueue } from "./follow-queue.js";
 import { Compactor, MemoryStore, type MemoryBridge } from "./memory.js";
 
 export interface SceneContext {
@@ -24,6 +26,21 @@ export interface HoudiniExtensionBridge extends MemoryBridge {
   execute(command: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 
+export interface RenderedCop {
+  path: string;
+  node: string;
+  frame: number;
+}
+
+export interface FollowReport {
+  followed: string | null;
+  panes: number;
+  categories?: Record<string, string>;
+}
+
+export const COP_NUDGE =
+  "You changed Copernicus (COP) nodes this turn but have not looked at the result. Call inspect_cop on the network's output node now, fix what the image shows is wrong, then finish. Do not summarise.";
+
 export interface HoudiniExtensionOptions {
   bridge: HoudiniExtensionBridge;
   houdiniPort: number;
@@ -31,6 +48,8 @@ export interface HoudiniExtensionOptions {
   fileToolsEnabled?: () => boolean;
   /** Whether the scene follows the agent (selection + linked pane tabs). Default: always. */
   followNodes?: () => boolean;
+  /** Minimum time each followed selection stays on screen. Default 500 ms. */
+  followMinGapMs?: number;
   /** Reports the autosave backup taken before the first modifying tool call of a turn, or its failure. */
   onBackup?: (report: { path: string } | { skipped: string } | { error: string }) => void;
   /** One-shot condense call for memory compaction. Omit to disable compaction. */
@@ -166,6 +185,16 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   let turnOpen = false;
   let backedUpThisTurn = false;
   const argsByCall = new Map<string, unknown>();
+  let copDirty = false;
+  let nudges = 0;
+  const followQueue = new FollowQueue<FollowReport>((paths) => bridge.runHelper<FollowReport>("follow_nodes", { paths }), options.followMinGapMs ?? 500);
+
+  const inspectCop = async (nodePath: string, maxSize = 1024) => {
+    const rendered = await bridge.runHelper<RenderedCop>("render_cop", { node_path: nodePath, max_size: maxSize });
+    const png = await readFile(rendered.path);
+    copDirty = false;
+    return { rendered, data: png.toString("base64") };
+  };
 
   const endTurn = async () => {
     if (!turnOpen) return;
@@ -184,6 +213,8 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       await bridge.runHelper("begin_turn", { label: `houdini-pi: ${event.prompt.slice(0, 60)}` });
       turnOpen = true;
       backedUpThisTurn = false;
+      copDirty = false;
+      nudges = 0;
       return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText), display: false } };
     });
 
@@ -219,8 +250,73 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       if (!wants_follow) return;
       const paths = nodePathsFrom(args, (event.result as { content?: unknown })?.content ?? event.result);
       if (paths.length === 0) return;
-      // Best effort: following is a convenience, so a failure here is logged by the host, never raised into the turn.
-      await bridge.runHelper("follow_nodes", { paths }).catch((error) => options.onBackup?.({ error: `follow failed: ${(error as Error).message}` }));
+      // Queued, not awaited: the agent keeps working while selections are
+      // shown 500 ms apart. A failure is a convenience lost, never a turn lost.
+      const modifies = canModifyScene(event.toolName);
+      followQueue
+        .enqueue(paths)
+        .then((report) => {
+          const touched_cop = modifies && Object.values(report.categories ?? {}).includes("Cop");
+          if (touched_cop) copDirty = true;
+        })
+        .catch((error) => options.onBackup?.({ error: `follow failed: ${(error as Error).message}` }));
+    });
+
+    pi.on("agent_before_settle", async (event) => {
+      await followQueue.idle();
+      const must_look = copDirty && nudges < 2 && event.context.canContinue;
+      if (!must_look) return undefined;
+      nudges++;
+      return {
+        continue: true,
+        entries: [{ type: "custom_message", customType: "houdini-pi-nudge", content: COP_NUDGE, display: true }],
+      };
+    });
+
+    pi.registerTool({
+      name: "inspect_cop",
+      label: "Inspect a COP network's image",
+      description:
+        "Render a Copernicus (COP) node to an image and look at it. Call this after every change to a COP network, on its output node, before you finish. The image is returned to you.",
+      promptSnippet: "Render a COP node and see the image",
+      promptGuidelines: ["After changing anything in a Copernicus network, call inspect_cop on its output node and check the image before finishing."],
+      parameters: Type.Object({
+        node_path: Type.String({ description: "Absolute path of the COP node to render, usually the network's output" }),
+        max_size: Type.Optional(Type.Number({ description: "Longest edge in pixels, default 1024" })),
+      }),
+      execute: async (_id, params) => {
+        const { rendered, data } = await inspectCop(params.node_path, params.max_size ?? 1024);
+        return {
+          content: [
+            { type: "image", data, mimeType: "image/png" },
+            { type: "text", text: `Rendered ${rendered.node} at frame ${rendered.frame} to ${rendered.path}` },
+          ],
+          details: { path: rendered.path, node: rendered.node },
+        };
+      },
+    });
+
+    pi.registerCommand("inspect-cop", {
+      description: "Render a COP node to an image and show it to the agent: /inspect-cop /obj/copnet/out",
+      handler: async (args, ctx) => {
+        const nodePath = args.trim();
+        if (nodePath.length === 0) {
+          ctx.ui.notify("usage: /inspect-cop /path/to/cop/node", "warning");
+          return;
+        }
+        const { rendered, data } = await inspectCop(nodePath);
+        pi.sendMessage(
+          {
+            customType: "houdini-pi-inspect",
+            content: [
+              { type: "image", data, mimeType: "image/png" },
+              { type: "text", text: `The artist asked you to look at ${rendered.node} (rendered to ${rendered.path}). Describe what is wrong, if anything, in one line.` },
+            ],
+            display: true,
+          },
+          { triggerTurn: true },
+        );
+      },
     });
 
     pi.on("agent_settled", async (_event, ctx) => {

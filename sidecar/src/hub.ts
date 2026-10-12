@@ -100,6 +100,7 @@ export class SessionHub {
           result: typeof event.result === "string" ? event.result : JSON.stringify(event.result),
           isError: event.isError,
           durationMs: event.durationMs,
+          ...(event.image ? { image: event.image } : {}),
         });
         return;
       case "turn_end":
@@ -183,7 +184,8 @@ export class SessionHub {
         await this.agent.compact();
         return;
       case "list_models":
-        this.sendTo(socket, { type: "models", models: await this.agent.getAvailableModels() });
+        // The agent has to look at renders, so text-only models are not offered.
+        this.sendTo(socket, { type: "models", models: (await this.agent.getAvailableModels()).filter((m) => m.vision) });
         return;
       case "list_sessions":
         this.sendTo(socket, { type: "sessions", sessions: await this.agent.listSessions() });

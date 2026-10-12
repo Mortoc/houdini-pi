@@ -70,7 +70,7 @@ def test_follow_selects_the_last_node_and_drives_linked_panes(hou):
 
     report = hooks_target.follow_nodes(["/obj/geo1/wire1", "/obj/geo2", "/obj/missing"])
 
-    assert report == {"followed": "/obj/geo2", "panes": 2}
+    assert report == {"followed": "/obj/geo2", "panes": 2, "categories": {"/obj/geo1/wire1": "Object", "/obj/geo2": "Object"}}
     assert hou.nodes["/obj/geo2"].selected is True
     assert network.pwd is hou.nodes["/obj"] and network.current is hou.nodes["/obj/geo2"]
     assert parms.current is hou.nodes["/obj/geo2"]
@@ -84,6 +84,39 @@ def test_follow_without_a_link_group_only_selects(hou):
         FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.FollowSelection),
     ]
     report = hooks_target.follow_nodes(["/obj/geo1/wire1"])
-    assert report == {"followed": "/obj/geo1/wire1", "panes": 0}
+    assert report == {"followed": "/obj/geo1/wire1", "panes": 0, "categories": {"/obj/geo1/wire1": "Object"}}
     assert hou.nodes["/obj/geo1/wire1"].selected is True
     assert hooks_target.follow_nodes(["/nope"]) == {"followed": None, "panes": 0}
+
+
+def test_render_cop_uses_a_temporary_rop_image_and_removes_it(hou, tmp_path, monkeypatch):
+    monkeypatch.setattr(hooks_target, "PREVIEW_DIR_NAME", "previews-test")
+    from pathlib import Path
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    copnet = hou.add_node("/obj/hex_copnet", "copnet", hou.nodes["/obj"])
+    color = hou.add_node("/obj/hex_copnet/color_out", "monotorgb", copnet, category="Cop")
+
+    def execute(rop):
+        Path(rop.parm("copoutput").value).write_bytes(b"png")
+
+    copnet.on_execute = execute
+    report = hooks_target.render_cop("/obj/hex_copnet/color_out", max_size=512)
+    rop = copnet.children_created[0]
+    assert rop.parm("coppath").value == "/obj/hex_copnet/color_out"
+    assert rop.parm("res").value == (512, 512)
+    assert rop.destroyed is True
+    assert report["node"] == "/obj/hex_copnet/color_out"
+    assert Path(report["path"]).read_bytes() == b"png"
+    assert Path(report["path"]).parent == tmp_path / "previews-test"
+
+
+def test_render_cop_refuses_non_cop_nodes_and_reports_a_missing_file(hou, tmp_path, monkeypatch):
+    from pathlib import Path
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    with pytest.raises(ValueError, match="not a Copernicus"):
+        hooks_target.render_cop("/obj/geo1")
+    copnet = hou.add_node("/obj/c", "copnet", hou.nodes["/obj"])
+    hou.add_node("/obj/c/out", "monotorgb", copnet, category="Cop")
+    with pytest.raises(RuntimeError, match="produced no file"):
+        hooks_target.render_cop("/obj/c/out")
+    assert copnet.children_created[0].destroyed is True

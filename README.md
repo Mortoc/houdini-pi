@@ -55,7 +55,17 @@ is the package file pointing at it, for a home-manager `home.file` entry.
   panes set to *Last Selected Node* follow. Put the Pi tab and a network
   editor or parameter view in the same **Link Pane Tab** group (1–9) and they
   jump to the node's network and parameters as the agent works.
+  Selections are shown at least 500 ms apart so you can see each step.
   `{"followNodes": false}` in the settings file turns this off.
+- **No summaries**: the agent ends a turn silently; a green **Done** line (or
+  the tool error count) tells you how it went.
+- **COP inspection**: `inspect_cop` renders a Copernicus node to PNG through a
+  temporary File Output COP and returns the image to the model. The agent is
+  made to call it after any COP change before it may finish; the picture shows
+  up in the tool card. You can trigger it too: `/inspect-cop /obj/copnet/out`
+  in the pi CLI. Previews land in `~/.houdini-pi/previews/`.
+- **Models**: only models that accept images are offered, because the agent
+  has to look at renders.
 - **Reference nodes**: drag nodes from the network editor onto the pane; they
   become chips that ride along with your next message.
 - **Each turn is one Ctrl-Z** in Houdini. The footer also offers "undo this

@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { cleanName, namingPrompt, pickNamingModel, shouldRename } from "../src/namer.js";
 
 const models = [
-  { provider: "a", id: "big", name: "Big", reasoning: true, cost: { input: 10, output: 30 } },
-  { provider: "a", id: "nano", name: "Nano", reasoning: false, cost: { input: 0.1, output: 0.4 } },
-  { provider: "b", id: "free", name: "Free", reasoning: false, cost: { input: 0, output: 0 } },
-  { provider: "b", id: "unpriced", name: "Unpriced", reasoning: false },
+  { provider: "a", id: "big", name: "Big", reasoning: true, vision: true, cost: { input: 10, output: 30 } },
+  { provider: "a", id: "nano", name: "Nano", reasoning: false, vision: false, cost: { input: 0.1, output: 0.4 } },
+  { provider: "b", id: "free", name: "Free", reasoning: false, vision: false, cost: { input: 0, output: 0 } },
+  { provider: "b", id: "unpriced", name: "Unpriced", reasoning: false, vision: false },
 ];
 
 describe("session naming", () => {
@@ -15,7 +15,7 @@ describe("session naming", () => {
 
   it("honours an explicit provider/model setting, including ids with slashes", () => {
     expect(pickNamingModel(models, "a/big")?.id).toBe("big");
-    expect(pickNamingModel([{ provider: "openrouter", id: "google/gemini", name: "g", reasoning: false }], "openrouter/google/gemini")?.id).toBe("google/gemini");
+    expect(pickNamingModel([{ provider: "openrouter", id: "google/gemini", name: "g", reasoning: false, vision: true }], "openrouter/google/gemini")?.id).toBe("google/gemini");
     expect(pickNamingModel(models, "a/none")).toBeUndefined();
   });
 

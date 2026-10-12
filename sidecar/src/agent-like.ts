@@ -15,7 +15,7 @@ export type AgentEvent =
   | { type: "message_update"; assistantMessageEvent: AssistantStreamEvent }
   | { type: "message_end"; message: { role: string; text: string } }
   | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean; durationMs: number }
+  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: unknown; isError: boolean; durationMs: number; image?: { mimeType: string; data: string } }
   | { type: "turn_end"; turnIndex: number }
   | { type: "agent_settled"; aborted: boolean }
   | { type: "model_changed" };

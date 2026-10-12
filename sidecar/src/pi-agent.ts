@@ -36,7 +36,8 @@ export interface PiAgentOptions {
 function modelRef(model: Model<any> | undefined): ModelRef | undefined {
   if (model === undefined) return undefined;
   const cost = model.cost === undefined ? {} : { cost: { input: model.cost.input, output: model.cost.output } };
-  return { provider: model.provider, id: model.id, name: model.name, reasoning: model.reasoning, ...cost };
+  const vision = Array.isArray(model.input) && model.input.includes("image");
+  return { provider: model.provider, id: model.id, name: model.name, reasoning: model.reasoning, vision, ...cost };
 }
 
 function textOf(content: unknown): string {
@@ -202,8 +203,10 @@ export function mapEvent(event: AgentSessionEvent, turnIndex: number): AgentEven
       return { type: "message_end", message: { role: event.message.role, text: textOf((event.message as { content: unknown }).content) } };
     case "tool_execution_start":
       return { type: "tool_execution_start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args };
-    case "tool_execution_end":
-      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0 };
+    case "tool_execution_end": {
+      const image = firstImage((event.result as { content?: unknown })?.content);
+      return { type: "tool_execution_end", toolCallId: event.toolCallId, toolName: event.toolName, result: summariseResult(event.result), isError: event.isError, durationMs: event.durationMs ?? 0, ...(image ? { image } : {}) };
+    }
     case "turn_end":
       return { type: "turn_end", turnIndex };
     case "agent_settled":
@@ -217,4 +220,10 @@ function summariseResult(result: unknown): unknown {
   const content = (result as { content?: unknown })?.content;
   const text = textOf(content);
   return text.length > 0 ? text : result;
+}
+
+function firstImage(content: unknown): { mimeType: string; data: string } | undefined {
+  if (!Array.isArray(content)) return undefined;
+  const part = content.find((p) => typeof p === "object" && p !== null && (p as { type?: string }).type === "image") as { mimeType: string; data: string } | undefined;
+  return part === undefined ? undefined : { mimeType: part.mimeType, data: part.data };
 }

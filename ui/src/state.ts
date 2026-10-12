@@ -7,6 +7,7 @@ export interface ToolCall {
   result?: string;
   isError?: boolean;
   durationMs?: number;
+  image?: { mimeType: string; data: string };
 }
 
 export type Entry =
@@ -24,7 +25,7 @@ export interface PaneState {
   models: ModelRef[];
   sessions: SessionRef[];
   memory: { text: string; prevAvailable: boolean } | undefined;
-  lastTurn: { cost: number; durationMs: number; aborted: boolean } | undefined;
+  lastTurn: { cost: number; durationMs: number; aborted: boolean; errors: number } | undefined;
   compaction: { before: number; after: number } | undefined;
 }
 
@@ -87,7 +88,7 @@ export function reduce(state: PaneState, message: ServerMessage): PaneState {
         ...state,
         entries: updateLastAssistant(state.entries, (e) => ({
           ...e,
-          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs } : t)),
+          tools: e.tools.map((t) => (t.toolCallId === message.toolCallId ? { ...t, result: message.result, isError: message.isError, durationMs: message.durationMs, ...(message.image ? { image: message.image } : {}) } : t)),
         })),
       };
     case "message_end":
@@ -96,7 +97,8 @@ export function reduce(state: PaneState, message: ServerMessage): PaneState {
       return state;
     case "settled": {
       const entries = state.entries.map((e): Entry => (e.kind === "assistant" && e.streaming ? { ...e, streaming: false, text: message.aborted && e.text === "" ? "(aborted)" : e.text } : e));
-      return { ...state, isStreaming: false, entries, lastTurn: { cost: message.cost, durationMs: message.durationMs, aborted: message.aborted } };
+      const errors = state.entries.filter((e): e is Extract<Entry, { kind: "assistant" }> => e.kind === "assistant" && e.streaming).flatMap((e) => e.tools).filter((t) => t.isError).length;
+      return { ...state, isStreaming: false, entries, lastTurn: { cost: message.cost, durationMs: message.durationMs, aborted: message.aborted, errors } };
     }
     case "models":
       return { ...state, models: message.models };

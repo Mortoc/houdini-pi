@@ -1,12 +1,15 @@
 import type { HistoryMessage, ModelRef, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 import type { AgentEvent, AgentLike, AgentStats } from "./agent-like.js";
 
+/** A 1×1 orange PNG. */
+export const TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export const FAKE_MODELS: ModelRef[] = [
-  { provider: "fake", id: "fake-fast", name: "Fake Fast", reasoning: false },
-  { provider: "fake", id: "fake-deep", name: "Fake Deep", reasoning: true },
-  { provider: "fake", id: "fake-nano", name: "Fake Nano", reasoning: false, cost: { input: 0.01, output: 0.02 } },
+  { provider: "fake", id: "fake-fast", name: "Fake Fast", reasoning: false, vision: true },
+  { provider: "fake", id: "fake-deep", name: "Fake Deep", reasoning: true, vision: true },
+  { provider: "fake", id: "fake-nano", name: "Fake Nano", reasoning: false, vision: false, cost: { input: 0.01, output: 0.02 } },
 ];
 
 /** Canned agent for UI work and tests: every prompt streams the same turn. */
@@ -55,6 +58,8 @@ export class FakeAgent implements AgentLike {
         { type: "tool_execution_end", toolCallId: "call-1", toolName: "mcp__fxhoudini__set_parameter", result: { ok: true }, isError: false, durationMs: 12 },
         { type: "tool_execution_start", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", args: { code: "import hou\n# thin every wire\nfor node in hou.node('/obj/geo1').children():\n    if node.type().name() == 'wire':\n        node.parm('radius').set(0.01)\nprint('done')" } },
         { type: "tool_execution_end", toolCallId: "call-2", toolName: "mcp__fxhoudini__execute_python", result: { success: true, stdout: "done" }, isError: false, durationMs: 40 },
+        { type: "tool_execution_start", toolCallId: "call-3", toolName: "inspect_cop", args: { node_path: "/obj/hex_copnet/color_out" } },
+        { type: "tool_execution_end", toolCallId: "call-3", toolName: "inspect_cop", result: "Rendered /obj/hex_copnet/color_out", isError: false, durationMs: 300, image: { mimeType: "image/png", data: TINY_PNG } },
         ...reply.split(" ").map((word): AgentEvent => ({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: `${word} ` } })),
         { type: "message_end", message: { role: "assistant", text: reply } },
         { type: "turn_end", turnIndex: this.turns++ },

@@ -67,3 +67,16 @@ Each entry: decision, options weighed, why. Review in the morning.
 17. **Node drag-and-drop reads `text/plain`** from the drop and keeps tokens
     that look like absolute node paths. Houdini's drag payload format is
     unverified from here; the e2e test covers the page side only.
+18. **COP previews render through a temporary `rop_image` COP** (`coppath` set to
+    the target, executed for the current frame, destroyed), not through
+    `hou.ImageLayer` pixel access: `ImageLayer` exposes no pixel export and the
+    ROP applies the same colour management the viewer does.
+19. **The "always inspect COPs" rule is enforced, not just prompted.** The
+    extension marks the turn COP-dirty when a modifying tool touched a node whose
+    category is `Cop`, and `agent_before_settle` returns `continue: true` with a
+    nudge message (max twice per turn) until `inspect_cop` has run. AGENTS.md
+    says the same in words.
+20. **Follow calls are queued 500 ms apart, never dropped** (`FollowQueue`);
+    `agent_before_settle` waits for the queue so the COP-dirty flag is final.
+21. **Only vision models are offered in the pane**; the naming model is picked
+    from all models since naming is text-only.

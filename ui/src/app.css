@@ -64,7 +64,12 @@ details pre { margin: 0; padding: 6px 8px; border-top: 1px solid #333; max-heigh
 .notice.error { background: #3a1f1f; border: 1px solid var(--error); }
 .notice.info { background: #1f2d3a; border: 1px solid #2b5c8a; }
 .notice .hint code { background: #111; padding: 0 4px; }
-.turn-footer { color: var(--muted); font-size: 11px; text-align: right; }
+.turn-footer { display: flex; gap: 10px; align-items: baseline; justify-content: flex-end; color: var(--muted); font-size: 11px; }
+.turn-footer .verdict { font-weight: 700; font-size: 13px; }
+.turn-footer.ok .verdict { color: #2ecc71; }
+.turn-footer.with-errors .verdict { color: #e67e22; }
+.turn-footer.aborted .verdict { color: var(--error); }
+.tool-image { display: block; max-width: 100%; max-height: 360px; margin: 6px 8px; border: 1px solid #333; background: #000; }
 button.link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; }
 .prompt { display: flex; gap: 8px; padding: 8px; border-top: 1px solid #000; background: var(--panel); }
 .prompt-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }

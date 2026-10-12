@@ -13,6 +13,8 @@ export interface ModelRef {
   id: string;
   name: string;
   reasoning: boolean;
+  /** Accepts image input. The pane only offers these: the agent must be able to look at renders. */
+  vision: boolean;
   /** USD per million tokens, when the provider publishes it. */
   cost?: { input: number; output: number };
 }
@@ -68,7 +70,7 @@ export type ServerMessage =
   | { type: "thinking_delta"; delta: string }
   | { type: "message_end"; role: "assistant"; text: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; args: unknown }
-  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number }
+  | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; image?: ImageAttachment }
   | { type: "turn_end"; turnIndex: number }
   | { type: "settled"; aborted: boolean; cost: number; durationMs: number }
   | { type: "models"; models: ModelRef[] }

@@ -32,6 +32,7 @@ const serverMessages: ServerMessage[] = [
   { type: "message_end", role: "assistant", text: "ab" },
   { type: "tool_start", toolCallId: "t1", toolName: "mcp__fxhoudini__set_parameter", args: { a: 1 } },
   { type: "tool_end", toolCallId: "t1", toolName: "x", result: "ok", isError: false, durationMs: 3 },
+  { type: "tool_end", toolCallId: "t2", toolName: "inspect_cop", result: "Rendered", isError: false, durationMs: 3, image: { mimeType: "image/png", data: "AAAA" } },
   { type: "turn_end", turnIndex: 0 },
   { type: "settled", aborted: false, cost: 0.01, durationMs: 1200 },
   { type: "models", models: [] },

@@ -18,7 +18,7 @@ test("connects, shows the hip and the default conversation name, streams a turn 
   await page.getByTestId("send").click();
   await expect(page.getByTestId("user-bubble")).toHaveText("make the wires thinner");
   const cards = page.getByTestId("tool-card");
-  await expect(cards).toHaveCount(2);
+  await expect(cards).toHaveCount(3);
   const card = cards.first();
   await expect(card.locator(".tool-name")).toHaveText("houdini: set_parameter");
   await expect(card.locator(".tool-summary")).toHaveText("/obj/geo1/wire1 · radius");
@@ -33,7 +33,11 @@ test("connects, shows the hip and the default conversation name, streams a turn 
   const scrolls = await code.evaluate((el) => el.scrollHeight > el.clientHeight);
   expect(scrolls, "six-line script must scroll inside a four-line box").toBe(true);
   await expect(page.getByTestId("assistant-bubble")).toContainText("I would make the wires thinner");
-  await expect(page.getByTestId("turn-footer")).toContainText("done");
+  const inspect = cards.nth(2);
+  await expect(inspect.locator(".tool-name")).toHaveText("inspect COP");
+  await expect(inspect.getByTestId("tool-image")).toBeVisible();
+  await expect(page.getByTestId("turn-footer")).toContainText("Done");
+  await expect(page.getByTestId("turn-footer").locator(".verdict")).toHaveCSS("color", "rgb(46, 204, 113)");
   await expect(page.getByTestId("thinking")).toHaveCount(0);
   await expect(page.getByTestId("session-name")).toContainText("Named:");
 });
@@ -45,7 +49,7 @@ test("thinking indicator animates while streaming and disappears after", async (
   const thinking = page.getByTestId("thinking");
   await expect(thinking).toBeVisible();
   await expect(thinking.locator(".thinking-dots i")).toHaveCount(3);
-  await expect(page.getByTestId("turn-footer")).toContainText("done");
+  await expect(page.getByTestId("turn-footer")).toContainText("Done");
   await expect(thinking).toHaveCount(0);
 });
 
@@ -55,7 +59,7 @@ test("abort while streaming marks the turn aborted", async ({ page }) => {
   await page.getByTestId("prompt").press("Enter");
   await expect(page.getByTestId("tool-card")).toBeVisible();
   await page.getByTestId("abort").click();
-  await expect(page.getByTestId("turn-footer")).toContainText("aborted");
+  await expect(page.getByTestId("turn-footer")).toContainText("Aborted");
   await expect(page.getByTestId("send")).toHaveText("send");
 });
 
@@ -63,7 +67,7 @@ test("model picker searches and picks; thinking picker round-trips", async ({ pa
   await open(page);
   await page.getByTestId("model-picker").click();
   const popup = page.getByTestId("model-popup");
-  await expect(popup.locator("li[role=option]")).toHaveCount(3);
+  await expect(popup.locator("li[role=option]")).toHaveCount(2);
   await page.getByTestId("model-search").fill("deep");
   await expect(popup.locator("li[role=option]")).toHaveCount(1);
   await page.getByTestId("model-search").press("Enter");

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeServer, encode, type ServerMessage } from "@houdini-pi/protocol";
 import { FakeAgent } from "../src/fake-agent.js";
-import { BridgeUnreachable } from "../src/houdini-bridge.js";
+import { BridgeUnreachable } from "@houdini-pi/pi-package";
 import { SessionHub, type HoudiniPort, type SocketLike } from "../src/hub.js";
 
 class FakeSocket implements SocketLike {
@@ -20,8 +20,10 @@ class FakeSocket implements SocketLike {
   }
 }
 
-function fakeHoudini(overrides: Partial<HoudiniPort> = {}): HoudiniPort & { memory: string; prev: string | undefined; undos: number } {
-  const port = {
+type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number };
+
+function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
+  const port: FakeHoudini = {
     memory: "# Memory\n",
     prev: undefined as string | undefined,
     undos: 0,

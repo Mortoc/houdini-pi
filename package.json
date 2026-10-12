@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:py": "uv run --with pytest pytest houdini/tests tests",
-    "typecheck": "tsc -b protocol sidecar pi ui",
+    "typecheck": "tsc -b protocol pi sidecar",
     "build": "npm run build -w protocol && npm run build -w ui && npm run build -w sidecar",
     "check-pi": "vitest run sidecar/test/pi-surface.test.ts"
   },

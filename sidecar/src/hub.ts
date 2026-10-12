@@ -1,7 +1,7 @@
 import { type ClientMessage, type ServerMessage, decodeClient, encode, ProtocolError } from "@houdini-pi/protocol";
 import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
-import { BridgeUnreachable } from "./houdini-bridge.js";
+import { BridgeUnreachable } from "@houdini-pi/pi-package";
 
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
 export interface HoudiniPort {

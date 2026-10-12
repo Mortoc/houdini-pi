@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { BridgeError, BridgeUnreachable, HoudiniBridge } from "../src/houdini-bridge.js";
+import { BridgeError, BridgeUnreachable, HoudiniBridge } from "../extensions/bridge.js";
 
 interface Seen {
   fn: string;

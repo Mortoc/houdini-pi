@@ -1,0 +1,288 @@
+"""Helpers the sidecar runs inside Houdini through fxhoudinimcp's execute_python.
+
+Every function returns something json.dumps can take, because the sidecar
+reads the result as a JSON string. `hou` is imported lazily so the module can
+be tested with a fake injected via `set_hou`.
+"""
+
+from __future__ import annotations
+
+import importlib
+from typing import Any
+
+MEMORY_KEY = "houdini_pi.memory"
+MEMORY_PREV_KEY = "houdini_pi.memory.prev"
+
+_hou: Any = None
+_open_group: Any = None
+
+
+def set_hou(module: Any):
+    """Inject a hou stand-in for tests; production resolves the real module."""
+    global _hou
+    _hou = module
+
+
+def _h() -> Any:
+    global _hou
+    if _hou is None:
+        _hou = importlib.import_module("hou")
+    return _hou
+
+
+def scene_context() -> dict[str, Any]:
+    hou = _h()
+    hip = hou.hipFile.path()
+    is_untitled = _is_untitled(hou)
+    selected = [{"path": node.path(), "type": node.type().name()} for node in hou.selectedNodes()]
+    current_network = None
+    display_node = None
+    # hou.ui exists only in a GUI session; hython and the tests have none.
+    ui = getattr(hou, "ui", None)
+    if ui is not None:
+        pane = ui.paneTabOfType(hou.paneTabType.NetworkEditor)
+        if pane is not None:
+            network = pane.pwd()
+            current_network = network.path()
+            display = network.displayNode() if hasattr(network, "displayNode") else None
+            display_node = display.path() if display is not None else None
+    return {
+        "hip": None if is_untitled else hip,
+        "current_network": current_network,
+        "selected": selected,
+        "display_node": display_node,
+        "frame": hou.frame(),
+    }
+
+
+def begin_turn(label: str) -> dict[str, Any]:
+    """Open an undo group that outlives this request, so a whole agent turn is one Ctrl-Z.
+
+    Houdini nests undo blocks by depth, so the per-command groups fxhoudinimcp
+    opens inside this one merge into it rather than closing it.
+    """
+    global _open_group
+    if _open_group is not None:
+        end_turn()
+    group = _h().undos.group(label)
+    group.__enter__()
+    _open_group = group
+    return {"open": True}
+
+
+def end_turn() -> dict[str, Any]:
+    global _open_group
+    if _open_group is None:
+        return {"closed": False}
+    group, _open_group = _open_group, None
+    group.__exit__(None, None, None)
+    return {"closed": True}
+
+
+def turn_is_open() -> bool:
+    return _open_group is not None
+
+
+def memory_read() -> dict[str, Any]:
+    root = _h().node("/")
+    text = root.userData(MEMORY_KEY)
+    prev = root.userData(MEMORY_PREV_KEY)
+    return {"text": text or "", "prev": prev if prev else None}
+
+
+def memory_write(text: str, prev: str | None) -> dict[str, Any]:
+    root = _h().node("/")
+    root.setUserData(MEMORY_KEY, text)
+    if prev:
+        root.setUserData(MEMORY_PREV_KEY, prev)
+    elif root.userData(MEMORY_PREV_KEY) is not None:
+        root.destroyUserData(MEMORY_PREV_KEY)
+    return {"chars": len(text), "prev": bool(prev)}
+
+
+def _is_untitled(hou: Any) -> bool:
+    """A scene that has never been saved. Houdini reports it as untitled.hip whether or not it has edits."""
+    return hou.hipFile.basename() == "untitled.hip"
+
+
+def backup_scene() -> dict[str, Any]:
+    """Write a Houdini backup (hou.hipFile.saveAsBackup) so a turn can be recovered beyond undo.
+
+    A never-saved scene has nowhere to back up to; that is reported as skipped,
+    not raised, because the artist asking for work before saving is normal.
+    """
+    hou = _h()
+    if _is_untitled(hou):
+        return {"skipped": "the scene has never been saved; save it to get backups before agent edits"}
+    try:
+        return {"path": hou.hipFile.saveAsBackup()}
+    except Exception as exc:  # hou.OperationFailed when $HOUDINI_BACKUP_DIR is unwritable, for one
+        return {"skipped": f"Houdini refused the backup: {exc}"}
+
+
+PANE_INTERFACE = "houdini_pi"
+
+
+def _pi_tabs(hou: Any) -> list[Any]:
+    ui = getattr(hou, "ui", None)
+    if ui is None:
+        return []
+    return [
+        tab
+        for tab in ui.paneTabs()
+        if tab.type() == hou.paneTabType.PythonPanel and tab.activeInterface() is not None and tab.activeInterface().name() == PANE_INTERFACE
+    ]
+
+
+def _pi_link_group(hou: Any):
+    """The link group of the Pi pane tab, or None when no pane is open."""
+    tabs = _pi_tabs(hou)
+    return tabs[0].linkGroup() if tabs else None
+
+
+def _link_name(hou: Any, group: Any) -> str:
+    if group == hou.paneLinkType.Pinned:
+        return "none"
+    if group == hou.paneLinkType.FollowSelection:
+        return "selection"
+    for n in range(1, 10):
+        if group == getattr(hou.paneLinkType, f"Group{n}"):
+            return str(n)
+    raise ValueError(f"unknown link group {group!r}")
+
+
+def _link_value(hou: Any, name: str) -> Any:
+    if name == "none":
+        return hou.paneLinkType.Pinned
+    if name == "selection":
+        return hou.paneLinkType.FollowSelection
+    if name in {str(n) for n in range(1, 10)}:
+        return getattr(hou.paneLinkType, f"Group{name}")
+    raise ValueError(f"unknown link group name {name!r}")
+
+
+def get_link_group() -> dict[str, Any]:
+    """The Pi pane's Link Pane Tab setting, as the pane's own control shows it."""
+    hou = _h()
+    group = _pi_link_group(hou)
+    return {"group": None if group is None else _link_name(hou, group)}
+
+
+def set_link_group(group: str) -> dict[str, Any]:
+    """Set every open Pi pane's link group; Houdini hides its own widget on Python Panel tabs."""
+    hou = _h()
+    value = _link_value(hou, group)
+    tabs = _pi_tabs(hou)
+    for tab in tabs:
+        tab.setLinkGroup(value)
+    return {"group": group, "tabs": len(tabs)}
+
+
+def follow_nodes(paths: list[str]) -> dict[str, Any]:
+    """Make the scene follow the agent: select the last node it touched and, when the Pi pane
+    is in a link group, point every pane tab in that group at it (network editors to its
+    parent network, parameter views to the node)."""
+    hou = _h()
+    nodes = [node for node in (hou.node(path) for path in paths) if node is not None]
+    if not nodes:
+        return {"followed": None, "panes": 0}
+    target = nodes[-1]
+    target.setSelected(True, clear_all_selected=True)
+
+    group = _pi_link_group(hou)
+    linked = group is not None and group not in (hou.paneLinkType.Pinned, hou.paneLinkType.FollowSelection)
+    panes = 0
+    if linked:
+        parent = target.parent() or target
+        for tab in hou.ui.paneTabs():
+            if tab.linkGroup() != group or tab.type() == hou.paneTabType.PythonPanel:
+                continue
+            if tab.type() == hou.paneTabType.NetworkEditor:
+                tab.setPwd(parent)
+                tab.setCurrentNode(target)
+                panes += 1
+            elif hasattr(tab, "setCurrentNode"):
+                tab.setCurrentNode(target)
+                panes += 1
+    categories = {node.path(): node.type().category().name() for node in nodes}
+    return {"followed": target.path(), "panes": panes, "categories": categories}
+
+
+PREVIEW_ROP = "houdini_pi_preview"
+
+
+def preview_dir():
+    """Where previews land: the system temp dir, and the sidecar deletes each one after reading it."""
+    import tempfile
+    from pathlib import Path
+
+    out = Path(tempfile.gettempdir()) / "houdini-pi"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
+    """Render a Copernicus node to a PNG through a temporary File Output (rop_image) COP.
+
+    The ROP is created beside the node, pointed at it with `coppath`, executed
+    for the current frame and destroyed again, so the network is left as it
+    was. Colour management is the ROP's default, which is what the viewer shows.
+    """
+    hou = _h()
+    node = hou.node(node_path)
+    if node is None:
+        raise ValueError(f"no node at {node_path}")
+    is_cop = node.type().category().name() == "Cop"
+    if not is_cop:
+        raise ValueError(f"{node_path} is a {node.type().category().name()} node, not a Copernicus (Cop) node")
+    out = preview_dir() / f"cop_{node.name()}_{int(hou.frame())}.png"
+    if out.exists():
+        out.unlink()
+    parent = node.parent()
+    rop = parent.createNode("rop_image", PREVIEW_ROP)
+    try:
+        rop.parm("coppath").set(node.path())
+        rop.parm("copoutput").set(str(out))
+        rop.parm("trange").set(0)
+        if max_size:
+            rop.parm("setres").set(1)
+            rop.parmTuple("res").set((max_size, max_size))
+        rop.parm("execute").pressButton()
+    finally:
+        rop.destroy()
+    if not out.exists():
+        errors = node.errors() if hasattr(node, "errors") else ()
+        raise RuntimeError(f"rendering {node_path} produced no file at {out}; node errors: {list(errors)}")
+    return {"path": str(out), "node": node.path(), "frame": hou.frame()}
+
+
+def capture_viewport(pane_name: str | None = None) -> dict[str, Any]:
+    """Screenshot the scene viewer (or the named pane tab) into the temp preview dir.
+
+    Goes through fxhoudinimcp's viewport.capture_screenshot handler so the capture
+    semantics (flipbook for scene viewers) stay upstream's.
+    """
+    from fxhoudinimcp_server import dispatcher
+
+    out = preview_dir() / f"viewport_{int(_h().frame())}.png"
+    if out.exists():
+        out.unlink()
+    params: dict[str, Any] = {"output_path": str(out)}
+    if pane_name:
+        params["pane_name"] = pane_name
+    result = dispatcher.dispatch("viewport.capture_screenshot", params)
+    if result.get("status") != "success":
+        raise RuntimeError(f"viewport capture failed: {result.get('error')}")
+    if not out.exists():
+        raise RuntimeError(f"viewport capture reported success but {out} is missing")
+    return {"path": str(out), "pane": pane_name, "frame": _h().frame()}
+
+
+def load_hip(path: str) -> dict[str, Any]:
+    """Open a hip for a conversation that worked on it. Refuses while the current scene has unsaved edits:
+    a modal save prompt would block this request, and silently discarding work is worse."""
+    hou = _h()
+    if hou.hipFile.hasUnsavedChanges():
+        raise RuntimeError(f"the current scene has unsaved changes; save or discard them, then open {path}")
+    hou.hipFile.load(path, suppress_save_prompt=True, ignore_load_warnings=True)
+    return {"hip": hou.hipFile.path()}

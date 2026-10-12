@@ -1,0 +1,7 @@
+{
+  "_houdini_pi_installer": true,
+  "env": [
+    { "HOUDINI_PI_ROOT": "__HOUDINI_PI_ROOT__" }
+  ],
+  "path": "$HOUDINI_PI_ROOT/houdini"
+}

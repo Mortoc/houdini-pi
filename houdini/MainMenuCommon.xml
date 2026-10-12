@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mainMenu>
+  <menuBar>
+    <subMenu id="windows_menu">
+      <subMenu id="squatch_studios_menu">
+        <label>Squatch Studios</label>
+        <insertBefore>h.pane</insertBefore>
+        <scriptItem id="houdini_pi_open">
+          <label>Houdini Agent</label>
+          <scriptCode><![CDATA[
+import houdini_pi.panel
+houdini_pi.panel.open_pane()
+]]></scriptCode>
+        </scriptItem>
+      </subMenu>
+    </subMenu>
+  </menuBar>
+</mainMenu>

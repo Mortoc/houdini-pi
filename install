@@ -1,0 +1,159 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
+"""Install houdini-pi into this user's Houdini: check dependencies, build, write the package JSON.
+
+    ./install              # install or update
+    ./install --uninstall  # remove the package file this script wrote
+    ./install --check      # dependency check only, no build, no write
+
+Refuses to proceed when a dependency is missing and names it. Never overwrites
+a package file it did not write itself.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+from collections.abc import Callable
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+NODE_MIN = (22, 19, 0)
+# The first pi release with built-in MCP (`builtin:mcp`), which the sidecar relies on.
+PI_MIN = (1, 0, 0)
+MARKER = "_houdini_pi_installer"
+PACKAGE_NAME = "houdini_pi.json"
+
+Runner = Callable[[list[str]], str | None]
+
+
+def run_output(argv: list[str]) -> str | None:
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def parse_version(text: str | None) -> tuple[int, ...] | None:
+    if text is None:
+        return None
+    match = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", text)
+    if match is None:
+        return None
+    return tuple(int(part or 0) for part in match.groups())
+
+
+def version_at_least(found: tuple[int, ...] | None, minimum: tuple[int, ...]) -> bool:
+    return found is not None and found >= minimum
+
+
+def check_dependencies(run: Runner = run_output, which: Callable[[str], str | None] = shutil.which) -> list[str]:
+    """Human-readable problems, empty when everything needed is present."""
+    problems: list[str] = []
+
+    node = parse_version(run(["node", "--version"])) if which("node") else None
+    if not version_at_least(node, NODE_MIN):
+        problems.append(f"node {'.'.join(map(str, NODE_MIN))}+ is required (found {node or 'none'}). https://nodejs.org")
+
+    pi = parse_version(run(["pi", "--version"])) if which("pi") else None
+    if not version_at_least(pi, PI_MIN):
+        problems.append(f"pi {'.'.join(map(str, PI_MIN))}+ is required (found {pi or 'none'}). curl -fsSL https://pi.dev/install.sh | sh")
+
+    if which("uvx") is None:
+        problems.append("uvx (uv) is required to run the fxhoudinimcp MCP server. https://docs.astral.sh/uv/")
+
+    if which("hython") is None:
+        problems.append("hython is not on PATH. Source houdini_setup, or run this from a Houdini shell.")
+
+    return problems
+
+
+def houdini_pref_dir(run: Runner = run_output) -> Path:
+    out = run(["hython", "-c", "import hou; print(hou.homeHoudiniDirectory())"])
+    if not out:
+        raise SystemExit("install: hython could not report hou.homeHoudiniDirectory(); is Houdini licensed?")
+    return Path(out.splitlines()[-1].strip())
+
+
+def package_json(root: Path, node: str | None = None, uvx: str | None = None) -> dict:
+    template = json.loads((root / "houdini" / "houdini_pi.json").read_text())
+    data = json.loads(json.dumps(template).replace("__HOUDINI_PI_ROOT__", str(root)))
+    # Houdini's PATH is not the shell's: pin the Node and uvx this install validated.
+    uvx = uvx or shutil.which("uvx")
+    node = node or shutil.which("node")
+    if node:
+        data["env"].append({"HOUDINI_PI_NODE": str(Path(node).resolve())})
+    if uvx:
+        data["env"].append({"HOUDINI_PI_UVX": str(Path(uvx).resolve())})
+    return data
+
+
+def write_package(packages_dir: Path, root: Path, node: str | None = None, uvx: str | None = None) -> Path:
+    target = packages_dir / PACKAGE_NAME
+    if target.exists():
+        try:
+            existing = json.loads(target.read_text())
+        except ValueError:
+            existing = {}
+        if existing.get(MARKER) is not True:
+            raise SystemExit(f"install: {target} exists and was not written by this installer; move it aside first.")
+    packages_dir.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(package_json(root, node, uvx), indent=2) + "\n")
+    return target
+
+
+def remove_package(packages_dir: Path) -> bool:
+    target = packages_dir / PACKAGE_NAME
+    if not target.exists():
+        return False
+    data = json.loads(target.read_text())
+    if data.get(MARKER) is not True:
+        raise SystemExit(f"install: {target} was not written by this installer; not removing it.")
+    target.unlink()
+    return True
+
+
+def build(root: Path):
+    for argv in (["npm", "ci"], ["npm", "run", "build"]):
+        print(f"[install] {' '.join(argv)}")
+        if subprocess.run(argv, cwd=root).returncode != 0:
+            raise SystemExit(f"install: {' '.join(argv)} failed")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--uninstall", action="store_true")
+    parser.add_argument("--check", action="store_true", help="check dependencies only")
+    args = parser.parse_args(argv)
+
+    if args.uninstall:
+        removed = remove_package(houdini_pref_dir() / "packages")
+        print("[install] removed" if removed else "[install] nothing to remove")
+        return 0
+
+    problems = check_dependencies()
+    if problems:
+        print("install: missing dependencies:", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return 1
+    print("[install] dependencies ok")
+    if args.check:
+        return 0
+
+    build(ROOT)
+    target = write_package(houdini_pref_dir() / "packages", ROOT)
+    print(f"[install] wrote {target}")
+    print("[install] done. In Houdini: houdini-pi > Open Agent Pane")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

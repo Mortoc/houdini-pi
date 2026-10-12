@@ -16,7 +16,7 @@ export function PromptBox({ streaming, connected, send, nodes, onNodesChange, dr
     const trimmed = draft.trim();
     const nothing = trimmed.length === 0 && nodes.length === 0;
     if (nothing) return;
-    const refs = nodes.length === 0 ? "" : `\n\nNodes: ${nodes.map((n) => `\`${n}\``).join(", ")}`;
+    const refs = nodes.length === 0 ? "" : `\n\nRefs: ${nodes.map((n) => `\`${n}\``).join(", ")}`;
     const full = `${trimmed}${refs}`.trim();
     send(streaming ? { type: "steer", text: full } : { type: "prompt", text: full });
     onDraftChange("");
@@ -37,7 +37,9 @@ export function PromptBox({ streaming, connected, send, nodes, onNodesChange, dr
             {nodes.map((node) => (
               <span key={node} className="chip" title={node}>
                 {node}
-                <button type="button" aria-label={`remove ${node}`} onClick={() => onNodesChange(nodes.filter((n) => n !== node))}>×</button>
+                <button type="button" className="chip-remove" aria-label={`remove ${node}`} title="Remove" onClick={() => onNodesChange(nodes.filter((n) => n !== node))}>
+                  ×
+                </button>
               </span>
             ))}
           </div>

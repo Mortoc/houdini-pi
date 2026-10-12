@@ -100,8 +100,9 @@ button.link { background: none; border: none; color: var(--accent); cursor: poin
 .prompt { display: flex; gap: 8px; padding: 8px; border-top: 1px solid #000; background: var(--panel); }
 .prompt-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .node-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chip { background: #2f3a4b; border: 1px solid #4a5a70; border-radius: 10px; padding: 1px 6px 1px 8px; font-family: ui-monospace, monospace; font-size: 11px; display: inline-flex; gap: 4px; align-items: center; }
-.chip button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 12px; }
+.chip { background: #2f3a4b; border: 1px solid #4a5a70; border-radius: 10px; padding: 0 0 0 8px; font-family: ui-monospace, monospace; font-size: 11px; display: inline-flex; align-items: center; }
+.chip-remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 0 8px 0 6px; margin: 0; height: 20px; line-height: 20px; font-size: 14px; border-radius: 0 10px 10px 0; }
+.chip-remove:hover { color: var(--fg); background: #3c4a60; }
 .prompt textarea { flex: 1; resize: none; background: #141416; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 6px; font: inherit; }
 .prompt-actions { display: flex; flex-direction: column; gap: 4px; }
 .prompt button { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-weight: 600; }

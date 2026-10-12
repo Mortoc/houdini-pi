@@ -169,19 +169,20 @@ test("a fresh conversation shows the welcome; the sessions tab lists conversatio
   await expect(page.getByTestId("welcome")).toBeVisible();
 });
 
-test("dropped node paths become chips and ride along with the prompt", async ({ page }) => {
+test("dropped node and parameter paths become chips and ride along with the prompt", async ({ page }) => {
   await open(page);
   await page.getByTestId("chat").dispatchEvent("drop", {
     dataTransfer: await page.evaluateHandle(() => {
       const dt = new DataTransfer();
-      dt.setData("text/plain", "/obj/geo1/wire1\n/obj/envlight1");
+      dt.setData("text/plain", "/obj/geo1/wire1");
+      dt.setData("application/x-houdini", "/obj/envlight1");
       return dt;
     }),
   });
   await expect(page.getByTestId("node-chips").locator(".chip")).toHaveCount(2);
   await page.getByTestId("prompt").fill("make these red");
   await page.getByTestId("send").click();
-  await expect(page.getByTestId("user-bubble")).toContainText("Nodes: `/obj/geo1/wire1`, `/obj/envlight1`");
+  await expect(page.getByTestId("user-bubble")).toContainText("Refs: `/obj/geo1/wire1`, `/obj/envlight1`");
   await expect(page.getByTestId("node-chips")).toHaveCount(0);
 });
 

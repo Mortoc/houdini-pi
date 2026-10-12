@@ -48,13 +48,18 @@ export function App() {
     if (next === "memory") send({ type: "memory_read" });
   };
 
-  // Houdini drags node paths as plain text, one per line. Anything that
-  // looks like an absolute node path becomes a reference in the prompt.
+  // Houdini drags node and parameter paths as text, in whichever mime types
+  // the source pane uses. Every type is scanned; anything that looks like an
+  // absolute Houdini path becomes a reference in the prompt.
   const onDrop = (event: React.DragEvent) => {
-    const text = event.dataTransfer.getData("text/plain");
-    const paths = nodePathsIn(text);
-    if (paths.length === 0) return;
     event.preventDefault();
+    const types = [...event.dataTransfer.types];
+    const payloads = types.map((type) => event.dataTransfer.getData(type)).filter((t) => typeof t === "string" && t.length > 0);
+    const paths = nodePathsIn(payloads.join("\n"));
+    if (paths.length === 0) {
+      dispatch({ type: "error", message: `Dropped something I could not read as a Houdini path. Types: ${types.join(", ") || "(none)"}. Data: ${payloads.map((p) => p.slice(0, 120)).join(" | ") || "(empty)"}` });
+      return;
+    }
     setTab("chat");
     setDroppedNodes((current) => [...current, ...paths.filter((p) => !current.includes(p))]);
   };

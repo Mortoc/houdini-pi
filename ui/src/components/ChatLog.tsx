@@ -69,7 +69,7 @@ export function ChatLog({ entries, lastTurn, onUndoTurn, send }: Props) {
             )}
             {entry.tools.some((t) => t.answer !== undefined) && entry.text.trim().length > 0 ? (
               <details className="narration" data-testid="narration">
-                <summary>unformatted reply</summary>
+                <summary>{entry.streaming ? "reply" : "Done"}</summary>
                 <Markdown text={entry.text} />
               </details>
             ) : (

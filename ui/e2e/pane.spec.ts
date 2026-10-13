@@ -202,7 +202,7 @@ test("reloading the pane replays tool cards and errors from history", async ({ p
   await expect(cards.nth(3).getByTestId("tool-image")).toBeVisible();
 });
 
-test("a question gets an answer block with action buttons; narration is tucked away", async ({ page }) => {
+test("a question gets an answer block with action buttons; the reply is tucked under Done", async ({ page }) => {
   await open(page);
   await page.getByTestId("prompt").fill("How do I thin the wires?");
   await page.getByTestId("prompt").press("Enter");
@@ -220,6 +220,7 @@ test("a question gets an answer block with action buttons; narration is tucked a
   await expect(page.getByTestId("send")).toHaveText("send");
   await expect(page.getByTestId("narration")).toBeVisible();
   await expect(page.getByTestId("narration")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("narration").locator("summary")).toHaveText("Done");
   await expect(page.getByTestId("assistant-bubble").last().getByTestId("tool-card")).toHaveCount(0);
   await expect(page.getByTestId("turn-footer")).toContainText("Done");
 });

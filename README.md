@@ -20,13 +20,7 @@ Help page: <https://mortoc.github.io/houdini-pi/help> (the pane's **?**).
 
 ## Install
 
-1. The fxhoudinimcp Houdini plugin (the bridge inside Houdini):
-
-   ```
-   uvx --from git+https://github.com/healkeiser/fxhoudinimcp@v2.25.0 fxhoudinimcp houdini-package --write ~/houdini22.0/packages
-   ```
-
-2. This plugin:
+1. This plugin, and the fxhoudinimcp bridge it drives:
 
    ```
    git clone https://github.com/Mortoc/houdini-pi ~/houdini-pi
@@ -34,10 +28,13 @@ Help page: <https://mortoc.github.io/houdini-pi/help> (the pane's **?**).
    ```
 
    `./install` checks the requirements (and names what is missing), builds the
-   sidecar and UI, and writes `~/houdini22.0/packages/houdini_pi.json`.
-   `./install --uninstall` removes that file.
+   sidecar and UI, installs the fxhoudinimcp bridge as a `uv tool`, and writes
+   `~/houdini22.0/packages/houdini_pi.json`; `./install --uninstall` removes
+   that file. The bridge goes in as a `uv tool` rather than upstream's
+   `uvx --from … houdini-package` one-liner, which writes a package file
+   pointing into uv's cache, where `uv cache clean` deletes it.
 
-3. Start Houdini. **Windows ▸ Squatch Studios ▸ Houdini Agent**, or add a
+2. Start Houdini. **Windows ▸ Squatch Studios ▸ Houdini Agent**, or add a
    **Houdini Agent** tab to any pane (New Pane Tab Type ▸ Houdini Agent).
 
 NixOS: `nix build .#houdini-pi` builds the plugin and `.#houdini-pi-package-json`
@@ -103,7 +100,7 @@ MCP server is registered automatically.
 
 - **Starting the houdini-pi sidecar…** never finishes: the pane shows the end of
   `~/.houdini-pi/sidecar-<port>.log` after 30 s.
-- **no Houdini bridge**: the fxhoudinimcp plugin is not loaded. Check step 1.
+- **no Houdini bridge**: the fxhoudinimcp plugin is not loaded. Re-run `./install`, then restart Houdini.
 - **login** notice: run `pi` in a terminal and `/login`.
 - **Black pane**: set `pane.softwareRender` (above).
 

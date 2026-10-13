@@ -19,6 +19,46 @@ export class BridgeUnreachable extends Error {
   }
 }
 
+/**
+ * Houdini is up but did not answer in time: a long cook, a modal dialog, or a main thread
+ * blocked some other way. Not "is Houdini running?", which is what a plain timeout used to
+ * report while Houdini sat there frozen.
+ */
+export class BridgeBusy extends Error {
+  constructor(public readonly url: string, public readonly seconds: number, cause: unknown) {
+    super(
+      `Houdini did not answer within ${seconds} s. It is busy on its main thread (a long cook, a modal dialog box, or a stuck call); check the Houdini window.`,
+      { cause },
+    );
+  }
+}
+
+/** What fxhoudinimcp's dispatcher allows a bounded command when nothing overrides it. */
+export const BRIDGE_DEFAULT_TIMEOUT_S = 120;
+/** How much longer than the bridge this client waits, so the bridge's own TIMEOUT answer arrives first. */
+const TIMEOUT_MARGIN_S = 15;
+
+/**
+ * Milliseconds to wait for `command`: the bridge's own deadline for it plus a margin.
+ *
+ * Mirrors fxhoudinimcp's `command_timeout` (dispatcher.py): FXHOUDINIMCP_TIMEOUT_<COMMAND>,
+ * then FXHOUDINIMCP_TIMEOUT, then 120 s. Read from this process's environment, which Houdini
+ * hands down from the package file that sets them. A client deadline SHORTER than the
+ * bridge's is the bug this replaces: the client gave up at 60 s and called a frozen Houdini
+ * unreachable while the bridge was still inside its 120 s.
+ *
+ * Only for bounded commands. Upstream runs a few (write_cache, start_render) with no
+ * deadline; nothing here sends them.
+ */
+export function commandTimeoutMs(command: string, env: Record<string, string | undefined> = process.env): number {
+  const specific = "FXHOUDINIMCP_TIMEOUT_" + command.toUpperCase().replaceAll(".", "_");
+  for (const name of [specific, "FXHOUDINIMCP_TIMEOUT"]) {
+    const seconds = Number((env[name] ?? "").trim());
+    if (Number.isFinite(seconds) && seconds > 0) return (seconds + TIMEOUT_MARGIN_S) * 1000;
+  }
+  return (BRIDGE_DEFAULT_TIMEOUT_S + TIMEOUT_MARGIN_S) * 1000;
+}
+
 export class BridgeError extends Error {
   constructor(public readonly code: string, message: string, public readonly traceback?: string) {
     super(message);
@@ -53,12 +93,13 @@ export class HoudiniBridge {
   constructor(
     readonly port: number,
     private readonly fetchImpl: typeof fetch = fetch,
-    readonly timeoutMs = 60_000,
+    /** One deadline for every call; by default each command gets the bridge's own plus a margin. */
+    readonly timeoutMs?: number,
   ) {
     this.url = `http://127.0.0.1:${port}/api`;
   }
 
-  private async call(fn: string, kwargs: Record<string, unknown>, timeoutMs = this.timeoutMs): Promise<unknown> {
+  private async call(fn: string, kwargs: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
     const body = new URLSearchParams({ json: JSON.stringify([fn, [], kwargs]) });
     let response: Response;
     try {
@@ -69,6 +110,7 @@ export class HoudiniBridge {
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
+      if ((error as Error)?.name === "TimeoutError") throw new BridgeBusy(this.url, Math.round(timeoutMs / 1000), error);
       throw new BridgeUnreachable(this.url, error);
     }
     if (!response.ok) {
@@ -93,7 +135,7 @@ export class HoudiniBridge {
   }
 
   async execute(command: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    const envelope = (await this.call("mcp.execute", { command, params, request_id: randomUUID() })) as Envelope;
+    const envelope = (await this.call("mcp.execute", { command, params, request_id: randomUUID() }, this.timeoutMs ?? commandTimeoutMs(command))) as Envelope;
     if (envelope.status === "success") return envelope.data;
     if (envelope.status === "error") throw new BridgeError(envelope.error.code, envelope.error.message, envelope.error.traceback);
     throw new BridgeError("BAD_ENVELOPE", `unexpected bridge envelope: ${JSON.stringify(envelope)}`);

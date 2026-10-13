@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { BridgeError, BridgeUnreachable, HoudiniBridge } from "../extensions/bridge.js";
+import { BridgeBusy, BridgeError, BridgeUnreachable, HoudiniBridge, commandTimeoutMs } from "../extensions/bridge.js";
 
 interface Seen {
   fn: string;
@@ -95,5 +95,34 @@ describe("HoudiniBridge", () => {
     const failure = new HoudiniBridge(port).runHelper("begin_turn", { label: "x" });
     await expect(failure).rejects.toBeInstanceOf(BridgeError);
     await expect(failure).rejects.toMatchObject({ code: "PYTHON_ERROR", message: expect.stringContaining("NameError") });
+  });
+});
+
+describe("bridge deadlines", () => {
+  it("waits longer than the bridge's own deadline for the command", () => {
+    // fxhoudinimcp: FXHOUDINIMCP_TIMEOUT_<COMMAND>, then FXHOUDINIMCP_TIMEOUT, then 120 s.
+    expect(commandTimeoutMs("code.execute_python", {})).toBe(135_000);
+    expect(commandTimeoutMs("code.execute_python", { FXHOUDINIMCP_TIMEOUT: "300" })).toBe(315_000);
+    expect(
+      commandTimeoutMs("code.execute_python", { FXHOUDINIMCP_TIMEOUT: "300", FXHOUDINIMCP_TIMEOUT_CODE_EXECUTE_PYTHON: "30" }),
+    ).toBe(45_000);
+    expect(commandTimeoutMs("scene.undo", { FXHOUDINIMCP_TIMEOUT: "nonsense" })).toBe(135_000);
+  });
+
+  it("reports a bridge that accepts the request and never answers as busy, not unreachable", async () => {
+    // What a Houdini whose main thread is blocked looks like from here: the socket is up,
+    // the answer never comes. "Is Houdini running?" was the wrong thing to say about it.
+    const hung = createServer(() => {});
+    await new Promise<void>((resolve) => hung.listen(0, "127.0.0.1", resolve));
+    const address = hung.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    try {
+      const failure = new HoudiniBridge(port, fetch, 200).execute("code.execute_python");
+      await expect(failure).rejects.toBeInstanceOf(BridgeBusy);
+      await expect(failure).rejects.toThrow(/did not answer within/);
+    } finally {
+      hung.closeAllConnections();
+      await new Promise<void>((resolve) => hung.close(() => resolve()));
+    }
   });
 });

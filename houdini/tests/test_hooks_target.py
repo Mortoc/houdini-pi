@@ -172,3 +172,115 @@ def test_actions_drive_the_right_panes(hou):
         hooks_target.do_action("pane", "Nope")
     with pytest.raises(ValueError, match="unknown action"):
         hooks_target.do_action("dance", "x")
+
+
+class _Viewer(FakePaneTab):
+    """A scene viewer looking into one network."""
+
+    def __init__(self, hou, network):
+        super().__init__(hou.paneTabType.SceneViewer, None)
+        del self.pwd  # FakePaneTab stores pwd as an attribute; the real one is a method
+        self._network = network
+
+    def pwd(self):
+        return self._network
+
+
+class _Net:
+    def __init__(self, display=None, children=()):
+        self._display, self._children = display, list(children)
+
+    def displayNode(self):  # noqa: N802
+        return self._display
+
+    def children(self):
+        return self._children
+
+
+class _Drawn:
+    def __init__(self, path, errors=(), displayed=True, display=None):
+        self._path, self._errors, self._displayed, self._display = path, tuple(errors), displayed, display
+
+    def path(self):
+        return self._path
+
+    def errors(self):
+        return self._errors
+
+    def isDisplayFlagSet(self):  # noqa: N802
+        return self._displayed
+
+    def displayNode(self):  # noqa: N802
+        return self._display
+
+
+@pytest.fixture
+def upstream(monkeypatch, tmp_path):
+    """fxhoudinimcp's viewport handlers, with a dispatcher that fails the test if it is touched."""
+    import sys
+    import types
+
+    calls: list[dict] = []
+    viewer_box: dict = {}
+
+    def capture_screenshot(output_path, pane_name=None):
+        calls.append({"output_path": output_path, "pane_name": pane_name})
+        written = output_path.replace(".png", ".0012.png")  # a flipbook inserting the frame
+        open(written, "wb").write(b"png")
+        return {"success": True, "output_path": written}
+
+    handlers = types.ModuleType("fxhoudinimcp_server.handlers")
+    viewport = types.ModuleType("fxhoudinimcp_server.handlers.viewport_handlers")
+    viewport.capture_screenshot = capture_screenshot
+    viewport._find_scene_viewer = lambda: viewer_box["viewer"]
+    viewport._find_pane_by_name = lambda name: viewer_box["viewer"]
+    handlers.viewport_handlers = viewport
+    dispatcher = types.ModuleType("fxhoudinimcp_server.dispatcher")
+
+    def dispatch(*_a, **_k):
+        raise AssertionError("dispatch from the main thread deadlocks; call the handler directly")
+
+    dispatcher.dispatch = dispatch
+    package = types.ModuleType("fxhoudinimcp_server")
+    package.handlers, package.dispatcher = handlers, dispatcher
+    for name, module in {
+        "fxhoudinimcp_server": package,
+        "fxhoudinimcp_server.handlers": handlers,
+        "fxhoudinimcp_server.handlers.viewport_handlers": viewport,
+        "fxhoudinimcp_server.dispatcher": dispatcher,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(hooks_target, "preview_dir", lambda: tmp_path)
+    return calls, viewer_box
+
+
+def test_capture_viewport_calls_the_handler_not_the_dispatcher(hou, upstream):
+    calls, viewer_box = upstream
+    viewer_box["viewer"] = _Viewer(hou, _Net(display=_Drawn("/obj/geo1/OUT")))
+    report = hooks_target.capture_viewport()
+    assert len(calls) == 1
+    # The path upstream actually wrote, frame number and all, not the one asked for.
+    assert report["path"].endswith("viewport_12.0012.png")
+    assert report["frame"] == 12.0
+
+
+def test_capture_viewport_refuses_a_network_that_failed_to_cook(hou, upstream):
+    calls, viewer_box = upstream
+    broken = _Drawn("/obj/hex_tile/DAMAGED_HEX_TILE_OUT", errors=["Invalid source /obj/hex_tile/HEX_IN/repeat_end1."])
+    viewer_box["viewer"] = _Viewer(hou, _Net(display=broken))
+    with pytest.raises(RuntimeError, match="DAMAGED_HEX_TILE_OUT: Invalid source"):
+        hooks_target.capture_viewport()
+    assert calls == []
+
+
+def test_capture_viewport_checks_every_displayed_object_at_object_level(hou, upstream):
+    calls, viewer_box = upstream
+    fine = _Drawn("/obj/a", display=_Drawn("/obj/a/OUT"))
+    hidden_broken = _Drawn("/obj/b", displayed=False, display=_Drawn("/obj/b/OUT", errors=["boom"]))
+    shown_broken = _Drawn("/obj/c", display=_Drawn("/obj/c/OUT", errors=["bad file"]))
+    viewer_box["viewer"] = _Viewer(hou, _Net(children=[fine, hidden_broken, shown_broken]))
+    with pytest.raises(RuntimeError) as raised:
+        hooks_target.capture_viewport()
+    assert "/obj/c/OUT: bad file" in str(raised.value)
+    assert "/obj/b/OUT" not in str(raised.value)  # not drawn, so not this capture's problem
+    assert calls == []

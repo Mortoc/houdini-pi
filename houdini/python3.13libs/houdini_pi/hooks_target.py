@@ -8,6 +8,7 @@ be tested with a fake injected via `set_hou`.
 from __future__ import annotations
 
 import importlib
+import os
 from typing import Any
 
 MEMORY_KEY = "houdini_pi.memory"
@@ -218,26 +219,66 @@ def render_cop(node_path: str, max_size: int = 256) -> dict[str, Any]:
     return {"path": str(out), "node": node.path(), "frame": hou.frame()}
 
 
+def _displayed_errors(pane: Any) -> dict[str, list[str]]:
+    """Errors on the nodes a scene viewer draws, keyed by node path; empty when all is well.
+
+    Reads what the last cook left (`errors()`), it does not cook: forcing a cook here would
+    be the slow, blocking thing this check exists to avoid. So it catches a network already
+    known to be broken, which is the case that froze Houdini.
+    """
+    network = pane.pwd()
+    display = network.displayNode() if hasattr(network, "displayNode") else None
+    if display is not None:
+        drawn = [display]
+    else:
+        # Object level: every displayed object draws its own display SOP.
+        drawn = [
+            child.displayNode()
+            for child in network.children()
+            if child.isDisplayFlagSet() and hasattr(child, "displayNode") and child.displayNode() is not None
+        ]
+    return {node.path(): list(node.errors()) for node in drawn if node.errors()}
+
+
 def capture_viewport(pane_name: str | None = None) -> dict[str, Any]:
     """Screenshot the scene viewer (or the named pane tab) into the temp preview dir.
 
-    Goes through fxhoudinimcp's viewport.capture_screenshot handler so the capture
-    semantics (flipbook for scene viewers) stay upstream's.
-    """
-    from fxhoudinimcp_server import dispatcher
+    Calls fxhoudinimcp's capture_screenshot HANDLER directly, so the capture semantics
+    (flipbook for scene viewers) stay upstream's. NOT `dispatcher.dispatch`: this helper
+    already runs on Houdini's main thread (it arrives through execute_python, which dispatch
+    put there), and dispatch from the main thread deadlocks. It queues the capture for the
+    main thread from a worker and then blocks the main thread joining that worker, so
+    nothing runs until the join times out (FXHOUDINIMCP_TIMEOUT, 120 s); then the orphaned
+    capture runs anyway with nobody waiting for it. Measured on mortoc-ivy 2026-10-12: the
+    viewport froze, the sidecar gave up at 60 s, and a flipbook "Failed" box came after.
 
-    out = preview_dir() / f"viewport_{int(_h().frame())}.png"
+    Refuses when the viewer draws nodes that failed to cook. A flipbook re-cooks the display
+    node on the main thread, so a broken network costs a long freeze and a modal error box
+    instead of an answer; the errors themselves are the answer.
+    """
+    hou = _h()
+    from fxhoudinimcp_server.handlers import viewport_handlers
+
+    # Upstream's own pane resolution, so the pane checked is the pane captured.
+    pane = viewport_handlers._find_pane_by_name(pane_name) if pane_name is not None else viewport_handlers._find_scene_viewer()
+    if pane.type() == hou.paneTabType.SceneViewer:
+        broken = _displayed_errors(pane)
+        if broken:
+            listed = "\n".join(f"{path}: {' | '.join(errors)}" for path, errors in broken.items())
+            raise RuntimeError(f"not capturing: the viewport draws nodes that failed to cook, and a capture would re-cook them. Fix these first:\n{listed}")
+
+    out = preview_dir() / f"viewport_{int(hou.frame())}.png"
     if out.exists():
         out.unlink()
     params: dict[str, Any] = {"output_path": str(out)}
     if pane_name:
         params["pane_name"] = pane_name
-    result = dispatcher.dispatch("viewport.capture_screenshot", params)
-    if result.get("status") != "success":
-        raise RuntimeError(f"viewport capture failed: {result.get('error')}")
-    if not out.exists():
-        raise RuntimeError(f"viewport capture reported success but {out} is missing")
-    return {"path": str(out), "pane": pane_name, "frame": _h().frame()}
+    result = viewport_handlers.capture_screenshot(**params)
+    # The flipbook may insert the frame number into the name; upstream reports the real one.
+    written = result.get("output_path") or str(out)
+    if not os.path.isfile(written):
+        raise RuntimeError(f"viewport capture reported success but {written} is missing")
+    return {"path": written, "pane": pane_name, "frame": hou.frame()}
 
 
 def load_hip(path: str) -> dict[str, Any]:

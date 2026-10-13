@@ -51,9 +51,9 @@ is the package file to install with home-manager.
   a help page.
 - **Reference things** by dragging nodes or parameters from any pane onto the
   chat; they become chips on your next message.
-- **Follow along**: the node the agent touches becomes the selection. Set the
-  pane's link group (toolbar dropdown) to match a network editor and parameter
-  view, and they jump with it.
+- **Follow along**: the node the agent touches becomes the selection. Put the
+  Pi tab in the same **Link Pane Tab** group (Houdini's own pane control) as a
+  network editor and parameter view, and they jump with it.
 - **Renders**: after editing a Copernicus network the agent renders its output
   and checks the image before finishing (thumbnail in the card, click to
   expand). It can screenshot the viewport the same way.
@@ -62,8 +62,10 @@ is the package file to install with home-manager.
   Decisions, conventions, node roles. Edit it directly.
 - **Sessions tab**: earlier conversations, grouped by scene. Opening the pane
   always starts a new conversation; opening an old one also opens its hip.
-- **Models**: searchable picker; only image-capable models are listed. New
-  conversations start on DeepSeek V4 Flash Vision.
+- **Models**: searchable picker; only image-capable models are listed. Your
+  current model is first, then **Recommended** (the `defaultModel` list below),
+  then the rest. New conversations start on the first recommended model pi can
+  use, marked **(Default)**.
 
 ## Settings
 

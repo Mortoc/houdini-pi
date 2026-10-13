@@ -4,13 +4,18 @@ Defaults for how the agent builds networks. These are the maintainer's
 preferences, not laws: project memory overrides anything here, and a project
 that wants different conventions should say so in its project memory.
 
-## NULLs mark finished parts
+## NULLs mark finished parts, object merges mark inputs
 
 As each piece of an asset is created, end it with a NULL named in
 CAPITAL_CASE with an `_OUT` suffix: `FLOORS_OUT`, `WALLS_OUT`, `ROOF_OUT`,
 `TRIM_OUT`. Anytime you think "this part is done now from these nodes", that
 is when you add the NULL. The NULL is the output of that sub-tree; connect
 downstream nodes to it, not to the last SOP inside.
+
+At the top of the network, object merges that bring in source geometry get
+the matching `_IN` name: `FLOOR_IN`, `FLOOR_IN1`, `FLOOR_IN2` for multiple
+sources of the same part, `WALLS_IN`, `ROOF_IN`. The `_IN`/`_OUT` pair makes
+the data flow obvious at a glance: `FLOOR_IN` → … → `FLOOR_OUT`.
 
 CAPITAL_CASE so they sort to the top of lists and treeviews and are easy to
 spot in a network.

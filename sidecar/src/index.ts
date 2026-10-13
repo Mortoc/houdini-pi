@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { createHoudiniExtension, DEFAULT_ASSETS_DIR, HoudiniBridge } from "@houdini-pi/pi-package";
@@ -15,6 +15,15 @@ import { loadSettings } from "./settings.js";
 import { watchParent } from "./watchdog.js";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+/** The default house rules, shipped with houdini-pi. Project memory overrides these. */
+function loadHouseRules(): string {
+  try {
+    return readFileSync(join(REPO_ROOT, "pi", "skills", "houdini", "HOUSE-RULES.md"), "utf-8");
+  } catch {
+    return "";
+  }
+}
 
 export function parseCli(argv: string[]) {
   const { values } = parseArgs({
@@ -84,6 +93,7 @@ export async function main(argv = process.argv.slice(2)) {
       houdiniPort: cli.houdiniPort,
       followNodes: () => settings.followNodes,
       autoLayout: () => settings.layout.autoLayout,
+      houseRules: loadHouseRules(),
       onBackup: (report) => {
         if ("error" in report) hubRef?.broadcast({ type: "error", message: `backup before the turn failed: ${report.error}` });
         if ("skipped" in report) hubRef?.broadcast({ type: "error", message: `no backup this turn: ${report.skipped}` });

@@ -62,6 +62,12 @@ export interface HoudiniExtensionOptions {
    * Default: off.
    */
   autoLayout?: () => boolean;
+  /**
+   * House rules: the maintainer's default conventions for building networks
+   * (NULL naming, UI design). Injected into the context every turn. Project
+   * memory overrides these. Default: empty.
+   */
+  houseRules?: string;
   /** Minimum time each followed selection stays on screen. Default 500 ms. */
   followMinGapMs?: number;
   /** Reports the autosave backup taken before the first modifying tool call of a turn, why it was skipped, or its failure. */
@@ -177,7 +183,7 @@ export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF, com
   };
 }
 
-export function contextBlock(scene: SceneContext, hipMemory: string, projectMemory: string | null): string {
+export function contextBlock(scene: SceneContext, hipMemory: string, projectMemory: string | null, houseRules: string): string {
   const selected = scene.selected.length === 0 ? "(nothing selected)" : scene.selected.map((n) => `${n.path} (${n.type})`).join(", ");
   const lines = [
     "## Houdini scene right now",
@@ -194,6 +200,10 @@ export function contextBlock(scene: SceneContext, hipMemory: string, projectMemo
   const has_project = projectMemory !== null && projectMemory.trim().length > 0;
   if (has_project) {
     lines.push("", "## Project memory (shared across all hips in $JOB)", "", projectMemory.trim());
+  }
+  const has_rules = houseRules.trim().length > 0;
+  if (has_rules) {
+    lines.push("", "## House rules (defaults; project memory overrides)", "", houseRules.trim());
   }
   return lines.join("\n");
 }
@@ -257,6 +267,8 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
     await bridge.runHelper("end_turn");
   };
 
+  const houseRules = options.houseRules ?? "";
+
   return function houdiniExtension(pi: ExtensionAPI) {
     if (options.registerMcp !== false) {
       pi.registerMcpServer("fxhoudini", mcpServerConfig(options.houdiniPort, options.fxhoudinimcpRef, uvxCommand(), options.autoLayout?.() ?? false));
@@ -274,7 +286,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       answered = false;
       answerNudges = 0;
       const projectText = projectSnapshot.available ? projectSnapshot.text : null;
-      return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText, projectText), display: false } };
+      return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText, projectText, houseRules), display: false } };
     });
 
     pi.on("tool_call", async (event) => {
@@ -539,7 +551,7 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       description: "Show what houdini-pi knows about the current Houdini scene",
       handler: async (_args, ctx) => {
         const scene = await bridge.runHelper<SceneContext>("scene_context");
-        ctx.ui.notify(contextBlock(scene, "", null), "info");
+        ctx.ui.notify(contextBlock(scene, "", null, ""), "info");
       },
     });
 

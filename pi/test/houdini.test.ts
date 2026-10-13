@@ -367,7 +367,7 @@ describe("houdini extension", () => {
   });
 
   it("renders an untitled scene with no memory", () => {
-    const block = contextBlock({ hip: null, current_network: null, selected: [], display_node: null, frame: 1 }, "  ", null);
+    const block = contextBlock({ hip: null, current_network: null, selected: [], display_node: null, frame: 1 }, "  ", null, "");
     expect(block).toContain("hip: (untitled)");
     expect(block).toContain("(nothing selected)");
     expect(block).not.toContain("Hip memory");
@@ -375,7 +375,7 @@ describe("houdini extension", () => {
   });
 
   it("shows hip and project memory in the context block", () => {
-    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "## Conventions\n- metres", "## Pipeline\n- EXRs only");
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "## Conventions\n- metres", "## Pipeline\n- EXRs only", "");
     expect(block).toContain("## Hip memory for /scenes/rock.hip");
     expect(block).toContain("- metres");
     expect(block).toContain("## Project memory (shared across all hips in $JOB)");
@@ -383,8 +383,19 @@ describe("houdini extension", () => {
   });
 
   it("omits project memory when unavailable", () => {
-    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "hip text", null);
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "hip text", null, "");
     expect(block).toContain("## Hip memory");
     expect(block).not.toContain("## Project memory");
+  });
+
+  it("shows house rules in the context block", () => {
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "", null, "## NULLs mark finished parts\n- FLOORS_OUT, WALLS_OUT");
+    expect(block).toContain("## House rules (defaults; project memory overrides)");
+    expect(block).toContain("FLOORS_OUT, WALLS_OUT");
+  });
+
+  it("omits house rules when empty", () => {
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "", null, "  ");
+    expect(block).not.toContain("House rules");
   });
 });

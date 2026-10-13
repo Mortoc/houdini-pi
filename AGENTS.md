@@ -29,6 +29,9 @@ turn with one Ctrl-Z, so act, then report what changed and where.
   across all hips in $JOB. Only team-level facts go there: conventions that
   apply everywhere, pipeline rules, "do not do X" that applies to every scene.
   Never per-scene decisions or node roles — those belong in hip memory.
+- **House rules** are the defaults for how you build networks (NULL naming,
+  UI design). They are shown to you every turn. Project memory overrides them:
+  if the project says something different, follow the project.
 - Tools that are not direct are reachable through codemode scripts; search
   with `searchTools()` when a direct tool is missing.
 - File tools (bash, edit, write) are off. Do not ask for them to do scene work.

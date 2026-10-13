@@ -94,7 +94,17 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
     case "session_name":
       return { ...state, sessionName: message.name ?? "New Conversation" };
     case "user_message":
-      return { ...state, isStreaming: true, activity: "waiting for the model", entries: [...state.entries, { kind: "user", id: nextId++, text: message.text }] };
+      // A new turn starts clean: the previous turn's footer goes, and any assistant entry
+      // still marked streaming is closed. One is left open when a turn never settled (the
+      // bridge died mid-turn, say), and `settled` counts tool errors over open entries, so
+      // an unclosed one put the dead turn's errors on the footer of the next, working turn.
+      return {
+        ...state,
+        isStreaming: true,
+        activity: "waiting for the model",
+        lastTurn: undefined,
+        entries: [...state.entries.map((e): Entry => (e.kind === "assistant" && e.streaming ? { ...e, streaming: false } : e)), { kind: "user", id: nextId++, text: message.text }],
+      };
     case "text_delta":
       return { ...state, activity: "writing", entries: updateLastAssistant(state.entries, (e) => ({ ...e, text: e.text + message.delta })) };
     case "thinking_delta": {

@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["protocol/src/**/*.test.ts", "sidecar/test/**/*.test.ts", "pi/test/**/*.test.ts"],
+    include: ["protocol/src/**/*.test.ts", "sidecar/test/**/*.test.ts", "pi/test/**/*.test.ts", "ui/src/**/*.test.ts"],
     environment: "node",
   },
 });

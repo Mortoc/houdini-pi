@@ -17,14 +17,22 @@ export function pickNamingModel(models: ModelRef[], setting: string): ModelRef |
 }
 
 /** The first candidate ("provider/model-id") that pi can actually use, or undefined when none is. */
-export function pickDefaultModel(available: ModelRef[], candidates: string[]): ModelRef | undefined {
-  for (const candidate of candidates) {
+/**
+ * The candidates ("provider/model-id") pi can actually use, in the candidates' order.
+ * One list answers both questions: these are the picker's Recommended section, and the first
+ * of them is the default a new conversation starts on, so the two can never disagree.
+ */
+export function recommendedModels(available: ModelRef[], candidates: string[]): ModelRef[] {
+  return candidates.flatMap((candidate) => {
     const [provider, ...rest] = candidate.split("/");
     const id = rest.join("/");
     const found = available.find((m) => m.provider === provider && m.id === id);
-    if (found !== undefined) return found;
-  }
-  return undefined;
+    return found === undefined ? [] : [found];
+  });
+}
+
+export function pickDefaultModel(available: ModelRef[], candidates: string[]): ModelRef | undefined {
+  return recommendedModels(available, candidates)[0];
 }
 
 export function shouldRename(userMessages: number, thresholds: number[]): boolean {

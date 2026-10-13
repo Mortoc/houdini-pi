@@ -1,4 +1,4 @@
-import type { Answer, HelloState, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { Answer, HelloState, ModelKey, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 
 export interface ToolCall {
   toolCallId: string;
@@ -27,6 +27,9 @@ export interface PaneState {
   entries: Entry[];
   models: ModelRef[];
   sessions: SessionRef[];
+  /** The curated models among `models`, best first; the first is the default. */
+  recommendedModels: ModelKey[];
+  defaultModel: ModelKey | undefined;
   memory: { text: string; prevAvailable: boolean } | undefined;
   lastTurn: { cost: number; durationMs: number; aborted: boolean; errors: number } | undefined;
   /** What the agent is doing right now, for the activity line. Undefined when idle. */
@@ -43,6 +46,8 @@ export const initialState: PaneState = {
   sessionName: "New Conversation",
   entries: [],
   models: [],
+  recommendedModels: [],
+  defaultModel: undefined,
   sessions: [],
   memory: undefined,
   lastTurn: undefined,
@@ -133,7 +138,7 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
       return { ...state, isStreaming: false, activity: undefined, entries, lastTurn: { cost: message.cost, durationMs: message.durationMs, aborted: message.aborted, errors } };
     }
     case "models":
-      return { ...state, models: message.models };
+      return { ...state, models: message.models, recommendedModels: message.recommended, defaultModel: message.defaultModel };
     case "sessions":
       return { ...state, sessions: message.sessions };
     case "memory":

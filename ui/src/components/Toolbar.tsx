@@ -40,6 +40,8 @@ export function Toolbar({ state, status, send, tab, onTab, onModelPicked }: Prop
         <ModelPicker
           models={state.models}
           current={state.model}
+          recommended={state.recommendedModels}
+          defaultModel={state.defaultModel}
           picked={state.modelPicked}
           onPick={(m) => {
             send({ type: "set_model", provider: m.provider, modelId: m.id });

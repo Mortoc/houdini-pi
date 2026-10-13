@@ -2,7 +2,7 @@ import { type ClientMessage, type HoudiniActionKind, type ServerMessage, decodeC
 import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
-import { DEFAULT_SESSION_NAME, SessionNamer } from "./namer.js";
+import { DEFAULT_SESSION_NAME, recommendedModels, SessionNamer } from "./namer.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
@@ -29,6 +29,7 @@ export class SessionHub {
   private sockets = new Set<SocketLike>();
   private promptStartedAt: number | undefined;
   private readonly namer: SessionNamer;
+  private readonly defaultModelCandidates: string[];
 
   private currentHip: string | undefined | null = null;
 
@@ -42,6 +43,7 @@ export class SessionHub {
     private readonly hipOfSession: (sessionPath: string) => string | undefined = () => undefined,
   ) {
     this.namer = new SessionNamer(agent, settings.naming);
+    this.defaultModelCandidates = settings.defaultModel;
     agent.subscribe((event) => this.onAgentEvent(event));
   }
 
@@ -81,6 +83,14 @@ export class SessionHub {
       isStreaming: this.agent.isStreaming,
     });
     this.sendTo(socket, { type: "history", messages: this.agent.getHistory() });
+  }
+
+  /** The picker's list. The agent has to look at renders, so text-only models are not offered. */
+  private async modelsMessage(): Promise<ServerMessage> {
+    const models = (await this.agent.getAvailableModels()).filter((m) => m.vision);
+    const recommended = recommendedModels(models, this.defaultModelCandidates).map(({ provider, id }) => ({ provider, id }));
+    const [defaultModel] = recommended;
+    return { type: "models", models, recommended, ...(defaultModel ? { defaultModel } : {}) };
   }
 
   private state(): ServerMessage {
@@ -216,8 +226,7 @@ export class SessionHub {
         await this.agent.compact();
         return;
       case "list_models":
-        // The agent has to look at renders, so text-only models are not offered.
-        this.sendTo(socket, { type: "models", models: (await this.agent.getAvailableModels()).filter((m) => m.vision) });
+        this.sendTo(socket, await this.modelsMessage());
         return;
       case "list_sessions": {
         const sessions = (await this.agent.listSessions()).map((session) => ({ ...session, hip: this.hipOfSession(session.path) }));

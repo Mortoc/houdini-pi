@@ -19,6 +19,12 @@ export interface ModelRef {
   cost?: { input: number; output: number };
 }
 
+/** Names a model without its metadata: what the sidecar says about a model it also listed. */
+export interface ModelKey {
+  provider: string;
+  id: string;
+}
+
 export interface SessionRef {
   id: string;
   path: string;
@@ -84,7 +90,14 @@ export type ServerMessage =
   | { type: "tool_end"; toolCallId: string; toolName: string; result: string; isError: boolean; durationMs: number; imageUrl?: string; answer?: Answer }
   | { type: "turn_end"; turnIndex: number }
   | { type: "settled"; aborted: boolean; cost: number; durationMs: number }
-  | { type: "models"; models: ModelRef[] }
+  | {
+      type: "models";
+      models: ModelRef[];
+      /** The curated models among `models`, best first (settings.defaultModel, available ones only). */
+      recommended: ModelKey[];
+      /** What a new conversation starts on: the first recommended model, when there is one. */
+      defaultModel?: ModelKey;
+    }
   | { type: "sessions"; sessions: SessionRef[] }
   | { type: "memory"; text: string; prevAvailable: boolean }
   | { type: "memory_compacted"; before: number; after: number }
@@ -141,7 +154,7 @@ const SERVER_TYPES: Record<ServerMessage["type"], readonly string[]> = {
   tool_end: ["toolCallId", "toolName", "result", "isError", "durationMs"],
   turn_end: ["turnIndex"],
   settled: ["aborted", "cost", "durationMs"],
-  models: ["models"],
+  models: ["models", "recommended"],
   sessions: ["sessions"],
   memory: ["text", "prevAvailable"],
   memory_compacted: ["before", "after"],

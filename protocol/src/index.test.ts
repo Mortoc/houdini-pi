@@ -37,7 +37,7 @@ const serverMessages: ServerMessage[] = [
   { type: "tool_end", toolCallId: "t3", toolName: "present_answer", result: "shown", isError: false, durationMs: 1, answer: { markdown: "# Hi", invalid: {} } },
   { type: "turn_end", turnIndex: 0 },
   { type: "settled", aborted: false, cost: 0.01, durationMs: 1200 },
-  { type: "models", models: [] },
+  { type: "models", models: [], recommended: [] },
   { type: "sessions", sessions: [{ id: "s", path: "/p.jsonl", name: undefined, firstMessage: "hi", modified: 1, hip: "/a.hip" }] },
   { type: "memory", text: "", prevAvailable: false },
   { type: "memory_compacted", before: 20000, after: 7000 },

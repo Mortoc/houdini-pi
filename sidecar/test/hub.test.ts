@@ -3,6 +3,7 @@ import { decodeServer, encode, type ServerMessage } from "@houdini-pi/protocol";
 import { FakeAgent } from "../src/fake-agent.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
 import { SessionHub, type HoudiniPort, type SocketLike } from "../src/hub.js";
+import { DEFAULT_SETTINGS } from "../src/settings.js";
 
 class FakeSocket implements SocketLike {
   received: ServerMessage[] = [];
@@ -143,6 +144,23 @@ describe("SessionHub", () => {
     socket.emit("message", encode({ type: "undo_turn" }));
     await settle();
     expect(houdini.undos).toBe(1);
+  });
+
+  it("marks the recommended models, in the settings' order, and the default as the first of them", async () => {
+    // fake-nano is listed first but has no vision, so it is neither offered nor the default.
+    const settings = { ...DEFAULT_SETTINGS, defaultModel: ["fake/fake-nano", "fake/fake-deep", "nope/gone", "fake/fake-fast"] };
+    const hub = new SessionHub(new FakeAgent(0), fakeHoudini(), settings);
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "list_models" }));
+    await socket.waitFor("models");
+    const models = socket.received.find((m) => m.type === "models") as Extract<ServerMessage, { type: "models" }>;
+    expect(models.recommended).toEqual([
+      { provider: "fake", id: "fake-deep" },
+      { provider: "fake", id: "fake-fast" },
+    ]);
+    expect(models.defaultModel).toEqual({ provider: "fake", id: "fake-deep" });
   });
 
   it("offers only vision models and passes tool images through", async () => {

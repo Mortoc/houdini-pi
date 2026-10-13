@@ -106,7 +106,8 @@ export class PiAgent implements AgentLike {
   private async applyDefaultModel() {
     const candidates = this.options.defaultModel ?? [];
     if (candidates.length === 0) return;
-    const chosen = pickDefaultModel(await this.getAvailableModels(), candidates);
+    // Vision models only, the same list the picker offers, so the default it marks is this one.
+    const chosen = pickDefaultModel((await this.getAvailableModels()).filter((m) => m.vision), candidates);
     if (chosen === undefined) {
       this.options.onExtensionError?.(new Error(`none of the default models is available: ${candidates.join(", ")}; using ${this.model?.id ?? "pi's default"}`));
       return;

@@ -64,8 +64,11 @@ export type ClientMessage =
   | { type: "memory_read" }
   | { type: "memory_edit"; text: string }
   | { type: "undo_compaction" }
+  | { type: "project_memory_read" }
+  | { type: "project_memory_edit"; text: string }
   | { type: "rename_session"; name: string }
   | { type: "houdini_action"; kind: HoudiniActionKind; value: string }
+  | { type: "open_external"; url: string }
   | { type: "undo_turn" };
 
 export interface HelloState {
@@ -101,6 +104,7 @@ export type ServerMessage =
   | { type: "sessions"; sessions: SessionRef[] }
   | { type: "memory"; text: string; prevAvailable: boolean }
   | { type: "memory_compacted"; before: number; after: number }
+  | { type: "project_memory"; available: boolean; text: string; prevAvailable: boolean }
   | { type: "error"; message: string; action?: "reconnect" | "login" }
   | { type: "history"; messages: HistoryMessage[] };
 
@@ -137,8 +141,11 @@ const CLIENT_TYPES: Record<ClientMessage["type"], readonly string[]> = {
   memory_read: [],
   memory_edit: ["text"],
   undo_compaction: [],
+  project_memory_read: [],
+  project_memory_edit: ["text"],
   rename_session: ["name"],
   houdini_action: ["kind", "value"],
+  open_external: ["url"],
   undo_turn: [],
 };
 
@@ -158,6 +165,7 @@ const SERVER_TYPES: Record<ServerMessage["type"], readonly string[]> = {
   sessions: ["sessions"],
   memory: ["text", "prevAvailable"],
   memory_compacted: ["before", "after"],
+  project_memory: ["available", "text", "prevAvailable"],
   error: ["message"],
   history: ["messages"],
 };

@@ -45,6 +45,8 @@ export function parseCli(argv: string[]) {
 function fakeHoudini(): HoudiniPort {
   let memory = "## Conventions\n\n- metres everywhere\n";
   let prev: string | undefined;
+  let projectMemory = "## Pipeline\n\n- renders go to /show/renders\n";
+  let projectPrev: string | undefined;
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
     loadHip: async () => {},
@@ -52,6 +54,8 @@ function fakeHoudini(): HoudiniPort {
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),
     memoryReplace: async (text) => { prev = memory; memory = text; },
     memoryRollback: async () => { if (prev !== undefined) { memory = prev; prev = undefined; } },
+    projectMemoryRead: async () => ({ available: true, text: projectMemory, prevAvailable: projectPrev !== undefined }),
+    projectMemoryReplace: async (text) => { projectPrev = projectMemory; projectMemory = text; },
     undoTurn: async () => {},
   };
 }
@@ -79,6 +83,7 @@ export async function main(argv = process.argv.slice(2)) {
       bridge,
       houdiniPort: cli.houdiniPort,
       followNodes: () => settings.followNodes,
+      autoLayout: () => settings.layout.autoLayout,
       onBackup: (report) => {
         if ("error" in report) hubRef?.broadcast({ type: "error", message: `backup before the turn failed: ${report.error}` });
         if ("skipped" in report) hubRef?.broadcast({ type: "error", message: `no backup this turn: ${report.skipped}` });
@@ -98,7 +103,16 @@ export async function main(argv = process.argv.slice(2)) {
     });
     agent = piAgent;
     let currentHip = hip;
-    const remember = () => {
+    // Fetch the hip fresh each turn: Save As changes the path without a
+    // reconnect, so the cached value goes stale and the session would be
+    // tagged with the old file. The hub's cache is updated too, so the next
+    // reconnect does not think the hip changed.
+    const remember = async () => {
+      const fresh = await houdini.hipPath().catch(() => undefined);
+      if (fresh !== undefined) {
+        currentHip = fresh;
+        hubRef?.setHip(fresh);
+      }
       if (currentHip !== undefined && agent.sessionPath !== undefined) index.tag(agent.sessionPath, currentHip);
     };
     hub = new SessionHub(
@@ -116,7 +130,7 @@ export async function main(argv = process.argv.slice(2)) {
     );
     hubRef = hub;
     agent.subscribe((event) => {
-      if (event.type === "agent_settled") remember();
+      if (event.type === "agent_settled") void remember();
     });
   }
 

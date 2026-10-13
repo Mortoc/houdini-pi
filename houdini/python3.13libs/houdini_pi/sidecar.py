@@ -45,6 +45,29 @@ def software_render_wanted(env: dict[str, str] | None = None, settings_file: Pat
     return bool(settings.get("pane", {}).get("softwareRender", False))
 
 
+def auto_layout_wanted(env: dict[str, str] | None = None, settings_file: Path = SETTINGS_FILE) -> bool | None:
+    """Whether to set FXHOUDINIMCP_AUTO_LAYOUT, and to what. None: leave it alone.
+
+    `HOUDINI_PI_AUTO_LAYOUT=1` (or `=0`), or `{"layout": {"autoLayout": true}}`
+    in the settings file. When set, the pane calls `hou.putenv` so the fxhoudinimcp
+    bridge inside Houdini picks it up. None means the upstream default applies
+    (off: only freshly-created nodes are placed, existing layouts never move;
+    on: `layoutChildren()` rearranges every child of the network).
+    """
+    env = os.environ if env is None else env
+    raw = env.get("HOUDINI_PI_AUTO_LAYOUT")
+    if raw is not None:
+        return raw.strip() == "1"
+    try:
+        settings = json.loads(settings_file.read_text())
+    except (OSError, ValueError):
+        return None
+    value = settings.get("layout", {}).get("autoLayout")
+    if value is None:
+        return None
+    return bool(value)
+
+
 
 
 def derive_port(pid: int) -> int:

@@ -31,6 +31,7 @@ export interface PaneState {
   recommendedModels: ModelKey[];
   defaultModel: ModelKey | undefined;
   memory: { text: string; prevAvailable: boolean } | undefined;
+  projectMemory: { available: boolean; text: string; prevAvailable: boolean } | undefined;
   lastTurn: { cost: number; durationMs: number; aborted: boolean; errors: number } | undefined;
   /** What the agent is doing right now, for the activity line. Undefined when idle. */
   activity: string | undefined;
@@ -50,6 +51,7 @@ export const initialState: PaneState = {
   defaultModel: undefined,
   sessions: [],
   memory: undefined,
+  projectMemory: undefined,
   lastTurn: undefined,
   compaction: undefined,
   activity: undefined,
@@ -143,6 +145,8 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
       return { ...state, sessions: message.sessions };
     case "memory":
       return { ...state, memory: { text: message.text, prevAvailable: message.prevAvailable } };
+    case "project_memory":
+      return { ...state, projectMemory: { available: message.available, text: message.text, prevAvailable: message.prevAvailable } };
     case "memory_compacted":
       return { ...state, compaction: { before: message.before, after: message.after } };
     case "error":

@@ -1,10 +1,13 @@
 /**
- * Per-hip project memory: curated markdown that travels with the .hip file.
+ * Hip memory: curated markdown that travels with the .hip file.
  *
  * Stored on the root node's user data through `houdini_pi.hooks_target`
  * helpers, so it dirties the scene like any edit and rides along through
  * save-as and version control. `.prev` holds the pre-compaction text for a
  * one-step rollback.
+ *
+ * Project memory (ProjectMemoryStore below) is the shared, $JOB-level
+ * counterpart: team conventions that apply across every hip in the project.
  */
 
 export interface MemoryBridge {
@@ -59,6 +62,55 @@ export class MemoryStore {
   }
 }
 
+export interface ProjectMemorySnapshot {
+  available: boolean;
+  text: string;
+  prev: string | null;
+}
+
+/**
+ * Project memory: a markdown file at $JOB/.houdini-pi/memory.md, shared across
+ * every hip in the project. Team conventions, pipeline rules — not per-scene
+ * decisions. Unavailable (available: false) when $JOB is not set.
+ */
+export class ProjectMemoryStore {
+  constructor(private readonly bridge: MemoryBridge) {}
+
+  async snapshot(): Promise<ProjectMemorySnapshot> {
+    return this.bridge.runHelper<ProjectMemorySnapshot>("project_memory_read");
+  }
+
+  async available(): Promise<boolean> {
+    return (await this.snapshot()).available;
+  }
+
+  async read(): Promise<string> {
+    return (await this.snapshot()).text;
+  }
+
+  async prevAvailable(): Promise<boolean> {
+    return (await this.snapshot()).prev !== null;
+  }
+
+  async replace(text: string): Promise<void> {
+    const current = await this.snapshot();
+    await this.bridge.runHelper("project_memory_write", { text, prev: current.text });
+  }
+
+  async append(section: string, text: string): Promise<string> {
+    const current = (await this.snapshot()).text;
+    const next = appendToSection(current, section, text);
+    await this.bridge.runHelper("project_memory_write", { text: next, prev: current });
+    return next;
+  }
+
+  async rollback(): Promise<void> {
+    const current = await this.snapshot();
+    if (current.prev === null) throw new Error("no previous project memory to roll back to");
+    await this.bridge.runHelper("project_memory_write", { text: current.prev, prev: null });
+  }
+}
+
 /** Append `text` under `## <section>`, creating the heading at the end when absent. */
 export function appendToSection(memory: string, section: string, text: string): string {
   const heading = `## ${section.trim()}`;
@@ -101,7 +153,7 @@ export class Compactor {
 
   condensePrompt(memory: string): string {
     return [
-      `Condense the project memory below to under ${this.target} tokens.`,
+      `Condense the hip memory below to under ${this.target} tokens.`,
       "Preserve every decision, naming convention and node path verbatim.",
       "Drop narration, repetition and anything a reader could re-derive from the scene.",
       "Keep the markdown section structure. Answer with the condensed memory only.",

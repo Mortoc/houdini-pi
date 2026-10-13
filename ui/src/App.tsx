@@ -59,7 +59,10 @@ export function App() {
   const openTab = (next: Tab) => {
     setTab(next);
     if (next === "sessions") send({ type: "list_sessions" });
-    if (next === "memory") send({ type: "memory_read" });
+    if (next === "memory") {
+      send({ type: "memory_read" });
+      send({ type: "project_memory_read" });
+    }
   };
 
   // Houdini drags node and parameter paths as text, in whichever mime types
@@ -100,7 +103,7 @@ export function App() {
           <PromptBox streaming={state.isStreaming} connected={status === "open"} thinkingLevel={state.thinkingLevel} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} draft={draft} onDraftChange={setDraft} />
         </>
       )}
-      {tab === "memory" && <MemoryTab memory={state.memory} compaction={state.compaction} send={send} />}
+      {tab === "memory" && <MemoryTab memory={state.memory} projectMemory={state.projectMemory} compaction={state.compaction} send={send} />}
       {tab === "sessions" && <SessionsTab sessions={state.sessions} current={state.hello?.sessionPath} hip={state.hello?.hip} send={send} onOpen={() => setTab("chat")} />}
     </div>
   );

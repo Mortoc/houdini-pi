@@ -42,6 +42,20 @@ def test_begin_turn_twice_closes_the_stale_group_first(hou):
     assert hou.undos.log == ["enter:a", "exit:a", "enter:b", "exit:b"]
 
 
+def test_undo_grouping_status_reports_unpatched_without_fxhoudinimcp():
+    # In the test environment there is no fxhoudinimcp_server module, so the
+    # patch could not apply. The helper must not raise.
+    assert hooks_target.undo_grouping_status() == {"patched": False}
+
+
+def test_patch_dispatcher_is_idempotent_and_safe_without_module():
+    # Calling the patch function directly must not raise when the dispatcher
+    # module is unavailable (test env, or upstream moved it).
+    assert hooks_target._patch_dispatcher_no_undo_group() is False
+    # And calling it twice is fine.
+    assert hooks_target._patch_dispatcher_no_undo_group() is False
+
+
 def test_memory_round_trips_through_root_user_data(hou):
     assert hooks_target.memory_read() == {"text": "", "prev": None}
     hooks_target.memory_write("# Memory\n- metres\n", None)

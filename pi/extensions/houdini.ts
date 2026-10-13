@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { actionLinks, ANSWER_NUDGE, isQuestion } from "./answers.js";
 import { FollowQueue } from "./follow-queue.js";
-import { Compactor, MemoryStore, type MemoryBridge } from "./memory.js";
+import { Compactor, MemoryStore, ProjectMemoryStore, type MemoryBridge } from "./memory.js";
 
 export interface SceneContext {
   hip: string | null;
@@ -56,6 +56,12 @@ export interface HoudiniExtensionOptions {
   fileToolsEnabled?: () => boolean;
   /** Whether the scene follows the agent (selection + linked pane tabs). Default: always. */
   followNodes?: () => boolean;
+  /**
+   * Whether the fxhoudinimcp MCP server may auto-layout the network
+   * (FXHOUDINIMCP_AUTO_LAYOUT=1). Off: only freshly-created nodes are placed.
+   * Default: off.
+   */
+  autoLayout?: () => boolean;
   /** Minimum time each followed selection stays on screen. Default 500 ms. */
   followMinGapMs?: number;
   /** Reports the autosave backup taken before the first modifying tool call of a turn, why it was skipped, or its failure. */
@@ -157,18 +163,21 @@ export function nodePathsFrom(args: unknown, result: unknown): string[] {
   return found.slice(0, 20);
 }
 
-export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF, command = uvxCommand()) {
+export function mcpServerConfig(houdiniPort: number, ref = FXHOUDINIMCP_REF, command = uvxCommand(), autoLayout = false) {
   return {
     command,
     args: ["--from", ref, "fxhoudinimcp"],
-    env: { HOUDINI_PORT: String(houdiniPort) },
+    env: {
+      HOUDINI_PORT: String(houdiniPort),
+      FXHOUDINIMCP_AUTO_LAYOUT: autoLayout ? "1" : "0",
+    },
     exposure: "codemode" as const,
     toolExposure: Object.fromEntries(DIRECT_TOOLS.map((tool) => [tool, "direct" as const])),
     description: "The live Houdini session: nodes, parameters, VEX, viewport screenshots.",
   };
 }
 
-export function contextBlock(scene: SceneContext, memory: string): string {
+export function contextBlock(scene: SceneContext, hipMemory: string, projectMemory: string | null): string {
   const selected = scene.selected.length === 0 ? "(nothing selected)" : scene.selected.map((n) => `${n.path} (${n.type})`).join(", ");
   const lines = [
     "## Houdini scene right now",
@@ -178,9 +187,13 @@ export function contextBlock(scene: SceneContext, memory: string): string {
     `- display node: ${scene.display_node ?? "(none)"}`,
     `- frame: ${scene.frame}`,
   ];
-  const has_memory = memory.trim().length > 0;
-  if (has_memory) {
-    lines.push("", `## Project memory for ${scene.hip ?? "this hip"}`, "", memory.trim());
+  const has_hip = hipMemory.trim().length > 0;
+  if (has_hip) {
+    lines.push("", `## Hip memory for ${scene.hip ?? "this hip"}`, "", hipMemory.trim());
+  }
+  const has_project = projectMemory !== null && projectMemory.trim().length > 0;
+  if (has_project) {
+    lines.push("", "## Project memory (shared across all hips in $JOB)", "", projectMemory.trim());
   }
   return lines.join("\n");
 }
@@ -188,6 +201,7 @@ export function contextBlock(scene: SceneContext, memory: string): string {
 export function createHoudiniExtension(options: HoudiniExtensionOptions) {
   const { bridge } = options;
   const memory = new MemoryStore(bridge);
+  const projectMemory = new ProjectMemoryStore(bridge);
   const fileToolsEnabled = options.fileToolsEnabled ?? (() => false);
   const compactor = options.condense === undefined ? undefined : new Compactor({ condense: (prompt) => options.condense!(prompt, currentCtx!) });
   let currentCtx: ExtensionContext | undefined;
@@ -245,12 +259,12 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
 
   return function houdiniExtension(pi: ExtensionAPI) {
     if (options.registerMcp !== false) {
-      pi.registerMcpServer("fxhoudini", mcpServerConfig(options.houdiniPort, options.fxhoudinimcpRef));
+      pi.registerMcpServer("fxhoudini", mcpServerConfig(options.houdiniPort, options.fxhoudinimcpRef, uvxCommand(), options.autoLayout?.() ?? false));
     }
 
     pi.on("before_agent_start", async (event, ctx) => {
       currentCtx = ctx;
-      const [scene, memoryText] = await Promise.all([bridge.runHelper<SceneContext>("scene_context"), memory.read()]);
+      const [scene, memoryText, projectSnapshot] = await Promise.all([bridge.runHelper<SceneContext>("scene_context"), memory.read(), projectMemory.snapshot()]);
       await bridge.runHelper("begin_turn", { label: `houdini-pi: ${event.prompt.slice(0, 60)}` });
       turnOpen = true;
       backedUpThisTurn = false;
@@ -259,7 +273,8 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       questionTurn = isQuestion(event.prompt);
       answered = false;
       answerNudges = 0;
-      return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText), display: false } };
+      const projectText = projectSnapshot.available ? projectSnapshot.text : null;
+      return { message: { customType: "houdini-pi-context", content: contextBlock(scene, memoryText, projectText), display: false } };
     });
 
     pi.on("tool_call", async (event) => {
@@ -449,34 +464,74 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
 
     pi.registerTool({
       name: "memory_read",
-      label: "Read project memory",
-      description: "Read the curated project memory stored in this .hip file.",
+      label: "Read hip memory",
+      description: "Read the curated hip memory stored in this .hip file. Per-scene decisions, naming conventions for these nodes, what a node is for.",
       parameters: Type.Object({}),
       execute: async () => ({ content: [{ type: "text", text: (await memory.read()) || "(empty)" }], details: {} }),
     });
 
     pi.registerTool({
       name: "memory_append",
-      label: "Append to project memory",
-      description: "Append a note under a section of the project memory stored in this .hip. Record decisions, naming conventions and node roles, never narration.",
+      label: "Append to hip memory",
+      description: "Append a note under a section of the hip memory stored in this .hip. Record decisions, naming conventions and node roles, never narration.",
       parameters: Type.Object({
         section: Type.String({ description: "Section heading, e.g. Conventions, Decisions, Node roles" }),
         text: Type.String({ description: "One or more markdown bullets" }),
       }),
       execute: async (_id, params) => {
         const next = await memory.append(params.section, params.text);
-        return { content: [{ type: "text", text: `memory is now ${next.length} chars` }], details: {} };
+        return { content: [{ type: "text", text: `hip memory is now ${next.length} chars` }], details: {} };
       },
     });
 
     pi.registerTool({
       name: "memory_replace",
-      label: "Replace project memory",
-      description: "Replace the whole project memory stored in this .hip. The previous text stays recoverable once.",
+      label: "Replace hip memory",
+      description: "Replace the whole hip memory stored in this .hip. The previous text stays recoverable once.",
       parameters: Type.Object({ text: Type.String() }),
       execute: async (_id, params) => {
         await memory.replace(params.text);
-        return { content: [{ type: "text", text: "memory replaced" }], details: {} };
+        return { content: [{ type: "text", text: "hip memory replaced" }], details: {} };
+      },
+    });
+
+    pi.registerTool({
+      name: "memory_read_project",
+      label: "Read project memory",
+      description: "Read the project memory shared across all hip files in $JOB. Team conventions, pipeline rules. Not for per-scene decisions.",
+      parameters: Type.Object({}),
+      execute: async () => {
+        const snapshot = await projectMemory.snapshot();
+        if (!snapshot.available) return { content: [{ type: "text", text: "$JOB is not set; project memory is unavailable." }], details: {} };
+        return { content: [{ type: "text", text: snapshot.text || "(empty)" }], details: {} };
+      },
+    });
+
+    pi.registerTool({
+      name: "memory_append_project",
+      label: "Append to project memory",
+      description:
+        "Append a note to the project memory shared across all hip files in $JOB. Only team-level facts: conventions that apply everywhere, pipeline rules, 'do not do X' that applies to every scene. Never per-scene decisions or node roles — those belong in hip memory.",
+      parameters: Type.Object({
+        section: Type.String({ description: "Section heading, e.g. Conventions, Pipeline, Do not" }),
+        text: Type.String({ description: "One or more markdown bullets" }),
+      }),
+      execute: async (_id, params) => {
+        if (!(await projectMemory.available())) throw new Error("$JOB is not set; project memory is unavailable.");
+        const next = await projectMemory.append(params.section, params.text);
+        return { content: [{ type: "text", text: `project memory is now ${next.length} chars` }], details: {} };
+      },
+    });
+
+    pi.registerTool({
+      name: "memory_replace_project",
+      label: "Replace project memory",
+      description: "Replace the whole project memory shared across all hip files in $JOB. The previous text stays recoverable once.",
+      parameters: Type.Object({ text: Type.String() }),
+      execute: async (_id, params) => {
+        if (!(await projectMemory.available())) throw new Error("$JOB is not set; project memory is unavailable.");
+        await projectMemory.replace(params.text);
+        return { content: [{ type: "text", text: "project memory replaced" }], details: {} };
       },
     });
 
@@ -484,12 +539,12 @@ export function createHoudiniExtension(options: HoudiniExtensionOptions) {
       description: "Show what houdini-pi knows about the current Houdini scene",
       handler: async (_args, ctx) => {
         const scene = await bridge.runHelper<SceneContext>("scene_context");
-        ctx.ui.notify(contextBlock(scene, ""), "info");
+        ctx.ui.notify(contextBlock(scene, "", null), "info");
       },
     });
 
     pi.registerCommand("memory", {
-      description: "Show the project memory stored in this .hip",
+      description: "Show the hip memory stored in this .hip",
       handler: async (_args, ctx) => {
         ctx.ui.notify((await memory.read()) || "(empty)", "info");
       },
@@ -520,6 +575,7 @@ export default function houdiniPiCliExtension(pi: ExtensionAPI) {
     bridge,
     houdiniPort: port,
     fileToolsEnabled: () => process.env["HOUDINI_PI_FILE_TOOLS"] === "1",
+    autoLayout: () => process.env["HOUDINI_PI_AUTO_LAYOUT"] === "1",
     onCompaction: (report) => {
       if ("error" in report) console.error(`[houdini-pi] memory compaction failed: ${report.error}`);
     },

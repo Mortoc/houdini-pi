@@ -36,6 +36,9 @@ class FakeBridge implements HoudiniExtensionBridge {
   renderFile = "/nonexistent.png";
   memory = "## Conventions\n\n- metres\n";
   prev: string | null = null;
+  projectMemory = "## Pipeline\n\n- EXRs only\n";
+  projectPrev: string | null = null;
+  projectAvailable = true;
   up = true;
   failBeginTurn = false;
   async isUp() { return this.up; }
@@ -46,6 +49,8 @@ class FakeBridge implements HoudiniExtensionBridge {
       case "scene_context": return scene as T;
       case "memory_read": return { text: this.memory, prev: this.prev } as T;
       case "memory_write": this.memory = kwargs["text"] as string; this.prev = kwargs["prev"] as string | null; return undefined as T;
+      case "project_memory_read": return { available: this.projectAvailable, text: this.projectMemory, prev: this.projectPrev } as T;
+      case "project_memory_write": this.projectMemory = kwargs["text"] as string; this.projectPrev = kwargs["prev"] as string | null; return undefined as T;
       case "begin_turn": if (this.failBeginTurn) throw new Error("hou exploded"); return undefined as T;
       case "end_turn": return undefined as T;
       case "backup_scene": this.backups++; return { path: `/bak/${this.backups}.hip` } as T;
@@ -94,11 +99,12 @@ describe("houdini extension", () => {
     const config = pi.mcp.get("fxhoudini");
     expect(config.command).toBe("uvx");
     expect(config.args).toEqual(["--from", expect.stringContaining("fxhoudinimcp@v"), "fxhoudinimcp"]);
-    expect(config.env).toEqual({ HOUDINI_PORT: "8103" });
+    expect(config.env).toEqual({ HOUDINI_PORT: "8103", FXHOUDINIMCP_AUTO_LAYOUT: "0" });
     expect(config.exposure).toBe("codemode");
     expect(config.toolExposure["set_parameter"]).toBe("direct");
     expect(Object.keys(config.toolExposure)).toHaveLength(DIRECT_TOOLS.length);
-    expect(mcpServerConfig(8100).env).toEqual({ HOUDINI_PORT: "8100" });
+    expect(mcpServerConfig(8100).env).toEqual({ HOUDINI_PORT: "8100", FXHOUDINIMCP_AUTO_LAYOUT: "0" });
+    expect(mcpServerConfig(8100, undefined, undefined, true).env).toEqual({ HOUDINI_PORT: "8100", FXHOUDINIMCP_AUTO_LAYOUT: "1" });
     expect(uvxCommand({})).toBe("uvx");
     expect(uvxCommand({ HOUDINI_PI_UVX: "/nix/store/x/bin/uvx" })).toBe("/nix/store/x/bin/uvx");
     expect(mcpServerConfig(8100, undefined, "/x/uvx").command).toBe("/x/uvx");
@@ -115,7 +121,7 @@ describe("houdini extension", () => {
     expect(result.message.customType).toBe("houdini-pi-context");
     expect(result.message.display).toBe(false);
     expect(result.message.content).toContain("/obj/geo1/wire1 (wire)");
-    expect(result.message.content).toContain("## Project memory for /scenes/rock.hip");
+    expect(result.message.content).toContain("## Hip memory for /scenes/rock.hip");
     expect(result.message.content).toContain("- metres");
     const begin = bridge.calls.find((c) => c.name === "begin_turn");
     expect(begin?.kwargs).toEqual({ label: "houdini-pi: make the wires thinner" });
@@ -361,9 +367,24 @@ describe("houdini extension", () => {
   });
 
   it("renders an untitled scene with no memory", () => {
-    const block = contextBlock({ hip: null, current_network: null, selected: [], display_node: null, frame: 1 }, "  ");
+    const block = contextBlock({ hip: null, current_network: null, selected: [], display_node: null, frame: 1 }, "  ", null);
     expect(block).toContain("hip: (untitled)");
     expect(block).toContain("(nothing selected)");
+    expect(block).not.toContain("Hip memory");
     expect(block).not.toContain("Project memory");
+  });
+
+  it("shows hip and project memory in the context block", () => {
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "## Conventions\n- metres", "## Pipeline\n- EXRs only");
+    expect(block).toContain("## Hip memory for /scenes/rock.hip");
+    expect(block).toContain("- metres");
+    expect(block).toContain("## Project memory (shared across all hips in $JOB)");
+    expect(block).toContain("- EXRs only");
+  });
+
+  it("omits project memory when unavailable", () => {
+    const block = contextBlock({ hip: "/scenes/rock.hip", current_network: "/obj", selected: [], display_node: null, frame: 1 }, "hip text", null);
+    expect(block).toContain("## Hip memory");
+    expect(block).not.toContain("## Project memory");
   });
 });

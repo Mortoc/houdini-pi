@@ -10,11 +10,15 @@ describe("settings", () => {
     expect(loadSettings(join(dir, "none.json"))).toEqual(DEFAULT_SETTINGS);
     const file = join(dir, "settings.json");
     writeFileSync(file, JSON.stringify({ naming: { model: "openrouter/x/y" } }));
-    expect(loadSettings(file)).toEqual({ naming: { model: "openrouter/x/y", renameAtUserMessages: [1, 5] }, followNodes: true, defaultModel: DEFAULT_SETTINGS.defaultModel });
+    expect(loadSettings(file)).toEqual({ naming: { model: "openrouter/x/y", renameAtUserMessages: [1, 5] }, followNodes: true, defaultModel: DEFAULT_SETTINGS.defaultModel, layout: { autoLayout: false } });
     writeFileSync(file, JSON.stringify({ defaultModel: "openrouter/a/b" }));
     expect(loadSettings(file).defaultModel).toEqual(["openrouter/a/b"]);
     writeFileSync(file, JSON.stringify({ followNodes: false }));
     expect(loadSettings(file).followNodes).toBe(false);
+    writeFileSync(file, JSON.stringify({ layout: { autoLayout: true } }));
+    expect(loadSettings(file).layout.autoLayout).toBe(true);
+    writeFileSync(file, JSON.stringify({ layout: { autoLayout: false } }));
+    expect(loadSettings(file).layout.autoLayout).toBe(false);
   });
 
   it("refuses a corrupt file", () => {

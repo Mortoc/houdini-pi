@@ -3,6 +3,7 @@ import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
 import { DEFAULT_SESSION_NAME, recommendedModels, SessionNamer } from "./namer.js";
+import { openExternal } from "./open-external.js";
 import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
@@ -15,6 +16,8 @@ export interface HoudiniPort {
   memoryRead(): Promise<{ text: string; prevAvailable: boolean }>;
   memoryReplace(text: string): Promise<void>;
   memoryRollback(): Promise<void>;
+  projectMemoryRead(): Promise<{ available: boolean; text: string; prevAvailable: boolean }>;
+  projectMemoryReplace(text: string): Promise<void>;
   undoTurn(): Promise<void>;
 }
 
@@ -32,6 +35,12 @@ export class SessionHub {
   private readonly defaultModelCandidates: string[];
 
   private currentHip: string | undefined | null = null;
+
+  /** Update the cached hip without firing onHipChanged. For Save As: the pane
+   *  stays connected, so the reconnect path never runs, but the hip path changed. */
+  setHip(hip: string | undefined): void {
+    this.currentHip = hip;
+  }
 
   constructor(
     private readonly agent: AgentLike,
@@ -244,8 +253,18 @@ export class SessionHub {
         await this.houdini.memoryRollback();
         this.broadcast({ type: "memory", ...(await this.houdini.memoryRead()) });
         return;
+      case "project_memory_read":
+        this.sendTo(socket, { type: "project_memory", ...(await this.houdini.projectMemoryRead()) });
+        return;
+      case "project_memory_edit":
+        await this.houdini.projectMemoryReplace(message.text);
+        this.broadcast({ type: "project_memory", ...(await this.houdini.projectMemoryRead()) });
+        return;
       case "houdini_action":
         await this.houdini.action(message.kind, message.value);
+        return;
+      case "open_external":
+        openExternal(message.url);
         return;
       case "rename_session":
         this.agent.setSessionName(message.name);

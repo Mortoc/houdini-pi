@@ -10,8 +10,9 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
 
 - **Filename · conversation name**: the hip you are in, and the name the
   conversation got after your first message.
-- **chat / memory / sessions**: the conversation, the project memory stored
-  in this hip, and earlier conversations grouped by scene. Opening the pane
+- **chat / memory / sessions**: the conversation, the hip memory stored
+  in this .hip (plus the project memory shared across $JOB), and earlier
+  conversations grouped by scene. Opening the pane
   always starts a new conversation; opening an earlier one also opens the hip
   it worked on (save your current scene first).
 - **Link Pane Tab**: put the Pi tab and a network editor or parameter view in
@@ -57,10 +58,17 @@ tucked under "unformatted reply".
 
 ## Memory
 
-Markdown stored inside the hip, shown to the agent every turn. Decisions,
-naming conventions, what a node is for. The agent appends to it; you can edit
-it in the **memory** tab. It compacts itself past ~16k tokens, with one-step
-rollback.
+Two scopes, both shown to the agent every turn:
+
+- **Hip memory** — stored inside the .hip file. Per-scene decisions, naming
+  conventions for these nodes, what a node is for. The agent appends to it;
+  you can edit it in the **memory** tab. It compacts itself past ~16k tokens,
+  with one-step rollback.
+- **Project memory** — stored at `$JOB/.houdini-pi/memory.md`, shared across
+  every hip in the project. Team conventions, pipeline rules, "do not do X"
+  that applies everywhere. Only really important things belong here. Edit it
+  in the **memory** tab, below the hip memory. Unavailable when `$JOB` is not
+  set.
 
 ## Settings
 
@@ -70,9 +78,12 @@ rollback.
 {
   "naming": { "model": "cheapest", "renameAtUserMessages": [1, 5] },
   "followNodes": true,
-  "defaultModel": ["openrouter/deepseek/deepseek-v4-flash-vision-exp", "openrouter/deepseek/deepseek-v4.1-flash"]
+  "defaultModel": ["openrouter/deepseek/deepseek-v4-flash-vision-exp", "openrouter/deepseek/deepseek-v4.1-flash"],
+  "layout": { "autoLayout": false }
 }
 ```
+
+`layout.autoLayout` sets `FXHOUDINIMCP_AUTO_LAYOUT` for the bridge. **Off** (default): freshly-created nodes are placed beside their inputs, but existing node positions never move. **On**: `create_node` re-lays-out the entire network (`layoutChildren()` on all children), and the `layout_children` tool becomes callable. Also settable with `HOUDINI_PI_AUTO_LAYOUT=1` in the environment.
 
 ## When something is wrong
 

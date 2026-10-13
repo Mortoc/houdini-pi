@@ -9,10 +9,52 @@ from __future__ import annotations
 
 import importlib
 import os
+from pathlib import Path
 from typing import Any
 
 MEMORY_KEY = "houdini_pi.memory"
 MEMORY_PREV_KEY = "houdini_pi.memory.prev"
+
+
+def _patch_dispatcher_no_undo_group() -> bool:
+    """Add code.execute_python to the dispatcher's no-undo-group set.
+
+    fxhoudinimcp's dispatcher wraps every MCP command in hou.undos.group().
+    begin_turn and end_turn arrive through execute_python, so the dispatcher's
+    wrapper group nests around the turn's group — and when the wrapper closes
+    at the end of the execute_python call, Houdini closes the nested turn group
+    too. The turn's undo group dies before any tool call runs, and each MCP
+    tool call becomes its own undo step: one Ctrl-Z undoes only the last call.
+
+    Skipping the wrapper for code.execute_python lets begin_turn open the
+    turn's group directly, and it stays open across every tool call in the
+    turn. Scene modifications made through execute_python are still captured
+    by the turn's group. Idempotent; silently degrades when upstream moves.
+    """
+    try:
+        from fxhoudinimcp_server import dispatcher
+
+        if "code.execute_python" not in dispatcher._NO_UNDO_GROUP:
+            dispatcher._NO_UNDO_GROUP = dispatcher._NO_UNDO_GROUP | {"code.execute_python"}
+        return True
+    except Exception:
+        return False
+
+
+# Apply on import. The dispatcher checks _NO_UNDO_GROUP at dispatch time, so
+# the patch takes effect on the next execute_python call after this module
+# loads — which is fine, because begin_turn runs after scene_context.
+_dispatcher_patched = _patch_dispatcher_no_undo_group()
+
+
+def undo_grouping_status() -> dict[str, Any]:
+    """Whether turn-level undo grouping is active (the dispatcher is patched)."""
+    try:
+        from fxhoudinimcp_server import dispatcher
+
+        return {"patched": "code.execute_python" in dispatcher._NO_UNDO_GROUP}
+    except Exception:
+        return {"patched": False}
 
 _hou: Any = None
 _open_group: Any = None
@@ -85,6 +127,7 @@ def turn_is_open() -> bool:
 
 
 def memory_read() -> dict[str, Any]:
+    """Hip memory: stored on the root node's user data, travels with the .hip file."""
     root = _h().node("/")
     text = root.userData(MEMORY_KEY)
     prev = root.userData(MEMORY_PREV_KEY)
@@ -98,6 +141,60 @@ def memory_write(text: str, prev: str | None) -> dict[str, Any]:
         root.setUserData(MEMORY_PREV_KEY, prev)
     elif root.userData(MEMORY_PREV_KEY) is not None:
         root.destroyUserData(MEMORY_PREV_KEY)
+    return {"chars": len(text), "prev": bool(prev)}
+
+
+PROJECT_MEMORY_DIR = ".houdini-pi"
+PROJECT_MEMORY_FILE = "memory.md"
+PROJECT_MEMORY_PREV_FILE = "memory.md.prev"
+
+
+def _project_memory_dir() -> Path | None:
+    """The project memory directory under $JOB, or None when $JOB is unset.
+
+    $JOB is the Houdini convention for the project root. When it is unset
+    (a loose hip with no project), project memory is simply unavailable.
+    """
+    hou = _h()
+    job = ""
+    if hasattr(hou, "text") and hasattr(hou.text, "expandString"):
+        job = hou.text.expandString("$JOB")
+    if not job or job == "$JOB":
+        job = os.environ.get("JOB", "")
+    if not job:
+        return None
+    return Path(job) / PROJECT_MEMORY_DIR
+
+
+def project_memory_read() -> dict[str, Any]:
+    """Project memory: a markdown file at $JOB/.houdini-pi/memory.md, shared across all hips."""
+    base = _project_memory_dir()
+    if base is None:
+        return {"available": False, "text": "", "prev": None}
+    path = base / PROJECT_MEMORY_FILE
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        text = ""
+    prev_path = base / PROJECT_MEMORY_PREV_FILE
+    try:
+        prev = prev_path.read_text()
+    except FileNotFoundError:
+        prev = None
+    return {"available": True, "text": text, "prev": prev}
+
+
+def project_memory_write(text: str, prev: str | None) -> dict[str, Any]:
+    base = _project_memory_dir()
+    if base is None:
+        raise RuntimeError("$JOB is not set; project memory needs a project root")
+    base.mkdir(parents=True, exist_ok=True)
+    (base / PROJECT_MEMORY_FILE).write_text(text)
+    prev_path = base / PROJECT_MEMORY_PREV_FILE
+    if prev:
+        prev_path.write_text(prev)
+    elif prev_path.exists():
+        prev_path.unlink()
     return {"chars": len(text), "prev": bool(prev)}
 
 

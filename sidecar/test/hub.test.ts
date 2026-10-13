@@ -21,12 +21,14 @@ class FakeSocket implements SocketLike {
   }
 }
 
-type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; undos: number; loaded: string[]; actions: string[] };
+type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; projectMemory: string; projectPrev: string | undefined; undos: number; loaded: string[]; actions: string[] };
 
 function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
   const port: FakeHoudini = {
     memory: "# Memory\n",
     prev: undefined as string | undefined,
+    projectMemory: "# Project\n",
+    projectPrev: undefined as string | undefined,
     undos: 0,
     loaded: [] as string[],
     actions: [] as string[],
@@ -36,6 +38,8 @@ function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
     memoryRead: async () => ({ text: port.memory, prevAvailable: port.prev !== undefined }),
     memoryReplace: async (text: string) => { port.prev = port.memory; port.memory = text; },
     memoryRollback: async () => { if (port.prev !== undefined) { port.memory = port.prev; port.prev = undefined; } },
+    projectMemoryRead: async () => ({ available: true, text: port.projectMemory, prevAvailable: port.projectPrev !== undefined }),
+    projectMemoryReplace: async (text: string) => { port.projectPrev = port.projectMemory; port.projectMemory = text; },
     undoTurn: async () => { port.undos++; },
     ...overrides,
   };
@@ -194,6 +198,26 @@ describe("SessionHub", () => {
     hub.attach(socket);
     await settle();
     expect(changes).toEqual(["/scenes/b.hip"]);
+    expect(socket.received[0]).toMatchObject({ type: "hello", hip: "/scenes/b.hip" });
+  });
+
+  it("setHip updates the cache without firing onHipChanged (Save As case)", async () => {
+    const houdini = fakeHoudini();
+    let hip = "/scenes/a.hip";
+    houdini.hipPath = async () => hip;
+    const changes: (string | undefined)[] = [];
+    const hub = new SessionHub(new FakeAgent(0), houdini, undefined, async (next) => { changes.push(next); });
+    hub.attach(new FakeSocket());
+    await settle();
+    // Save As: the hip path changes but the pane stays connected, so no
+    // reconnect fires. setHip updates the cache silently.
+    hip = "/scenes/b.hip";
+    hub.setHip("/scenes/b.hip");
+    // A later reconnect on the same (new) hip must NOT fire onHipChanged.
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    expect(changes).toEqual([]);
     expect(socket.received[0]).toMatchObject({ type: "hello", hip: "/scenes/b.hip" });
   });
 

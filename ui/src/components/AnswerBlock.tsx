@@ -24,7 +24,9 @@ export function AnswerBlock({ answer, send }: { answer: Answer; send: (message: 
     const renderer = new marked.Renderer();
     renderer.link = ({ href, text }) => {
       const action = parseAction(href);
-      if (action === undefined) return `<a href="${href}" target="_blank" rel="noreferrer">${text}</a>`;
+      // Not a houdini:// action: render as inert text. This pane is an app,
+      // not a browser; a navigable link would tear the agent out of the window.
+      if (action === undefined) return `<span class="link" title="${href.replace(/"/g, "&quot;")}">${text}</span>`;
       const reason = answer.invalid[href];
       const disabled = reason === undefined ? "" : ` disabled title="${reason.replace(/"/g, "&quot;")}"`;
       return `<button type="button" class="action action-${action.kind}" data-href="${href}"${disabled}><span class="action-icon">${ICON[action.kind]}</span>${text}</button>`;

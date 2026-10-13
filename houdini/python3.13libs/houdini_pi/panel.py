@@ -15,7 +15,7 @@ import json
 from PySide6 import QtCore, QtWidgets
 
 from houdini_pi import drops, sidecar
-from houdini_pi.sidecar import software_render_wanted
+from houdini_pi.sidecar import auto_layout_wanted, software_render_wanted
 
 BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
 POLL_MS = 250
@@ -24,6 +24,47 @@ GIVE_UP_AFTER_POLLS = 120
 
 def houdini_bridge_port() -> int:
     return int(os.environ.get(BRIDGE_PORT_ENV, "8100"))
+
+
+def _apply_auto_layout() -> None:
+    """Set FXHOUDINIMCP_AUTO_LAYOUT in Houdini's env when houdini-pi is configured to.
+
+    The fxhoudinimcp bridge reads this via `hou.getenv` first, so a `putenv` here
+    wins over the package file for this session. None means: leave the upstream
+    default (off) alone.
+    """
+    wanted = auto_layout_wanted()
+    if wanted is None:
+        return
+    import hou
+
+    hou.putenv("FXHOUDINIMCP_AUTO_LAYOUT", "1" if wanted else "0")
+
+
+class _GluedPage:
+    """A QWebEnginePage that never navigates away from the agent URL.
+
+    This pane is an app, not a browser: the only navigation allowed is the
+    initial load (and reloads of the exact same URL, e.g. the reconnect button).
+    Link clicks, window.location changes, form submissions and target=_blank
+    are all refused. Built lazily because QtWebEngineCore may not be importable
+    until the view is created.
+    """
+
+    def __new__(cls, allowed_url: str, parent):
+        from PySide6 import QtWebEngineCore, QtWebEngineWidgets
+
+        class GluedPage(QtWebEngineCore.QWebEnginePage):
+            def __init__(self, url: str, parent):
+                super().__init__(parent)
+                self._allowed = QtCore.QUrl(url)
+
+            def acceptNavigationRequest(self, url, _nav_type, is_main_frame):
+                # Only the exact initial URL, only in the main frame. Reloads
+                # of the same URL pass; everything else is refused.
+                return is_main_frame and url == self._allowed
+
+        return GluedPage(allowed_url, parent)
 
 
 class AgentPane(QtWidgets.QStackedWidget):
@@ -38,6 +79,7 @@ class AgentPane(QtWidgets.QStackedWidget):
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
         self._pending: sidecar.Pending | None = None
+        _apply_auto_layout()
         try:
             started = sidecar.start_sidecar(os.getpid(), houdini_bridge_port())
         except Exception:
@@ -72,6 +114,8 @@ class AgentPane(QtWidgets.QStackedWidget):
             self._fail("This Houdini's PySide6 has no QtWebEngineWidgets; houdini-pi needs it.")
             return
         view = QtWebEngineWidgets.QWebEngineView()
+        # Glue the page: no navigation away from the agent, ever.
+        view.setPage(_GluedPage(url, view))
         self._drops = DropForwarder(view)
         view.setUrl(QtCore.QUrl(url))
         self.addWidget(view)

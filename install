@@ -67,7 +67,10 @@ dotted() {
 }
 
 missing=0
-pass() { printf '  \342\234\223 %-12s %s\n' "$1" "$2"; }
+# Silent on success: only failures print. A wall of green checks tells the
+# user nothing they did not already know; a missing tool is the only output
+# worth making.
+pass() { :; }
 fail() {
   missing=$((missing + 1))
   printf '  \342\234\227 %-12s %s\n' "$1" "$2"
@@ -122,8 +125,6 @@ check_present() {
     not_found "$name" "$@"
   fi
 }
-
-echo "houdini-pi requirements"
 
 check_present uv \
   "uv runs this installer and the fxhoudinimcp MCP server." \

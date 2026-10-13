@@ -14,9 +14,21 @@ turn with one Ctrl-Z, so act, then report what changed and where.
   `create_wrangle`) over `execute_python`. Use `execute_python` for what no
   tool covers, and say so.
 - Units are whatever the hip uses. Never introduce a scale factor.
-- Project memory (`memory_read`, `memory_append`) is for durable facts:
-  decisions, naming conventions, what a node is for, "do not do X again".
-  Never narration of what you just did.
+- **Place nodes coherently.** The network editor's Y axis points down (y=0 at
+  the top, larger y lower on screen); X increases to the right. Lay out SOP
+  chains top-to-bottom: the first node at the top, each subsequent node below
+  it (increasing Y). Lay out COP chains left-to-right: the first node at the
+  left, each subsequent node to its right (increasing X). When you create
+  several nodes, set their positions with `set_parameter` on `tx`/`ty` (or pass
+  `position` to `create_node`) so the network reads cleanly without a manual
+  tidy-up.
+- **Hip memory** (`memory_read`, `memory_append`) is for durable facts about
+  this scene: decisions, naming conventions for these nodes, what a node is
+  for, "do not do X again" in this hip. Never narration of what you just did.
+- **Project memory** (`memory_read_project`, `memory_append_project`) is shared
+  across all hips in $JOB. Only team-level facts go there: conventions that
+  apply everywhere, pipeline rules, "do not do X" that applies to every scene.
+  Never per-scene decisions or node roles — those belong in hip memory.
 - Tools that are not direct are reachable through codemode scripts; search
   with `searchTools()` when a direct tool is missing.
 - File tools (bash, edit, write) are off. Do not ask for them to do scene work.

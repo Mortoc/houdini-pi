@@ -1,5 +1,4 @@
 import { type HoudiniBridge, MemoryStore } from "@houdini-pi/pi-package";
-import type { LinkGroup } from "@houdini-pi/protocol";
 import type { HoudiniPort } from "./hub.js";
 
 interface SceneContextLite {
@@ -16,10 +15,6 @@ export function houdiniPort(bridge: HoudiniBridge): HoudiniPort {
     },
     loadHip: async (path) => {
       await bridge.runHelper("load_hip", { path });
-    },
-    linkGroup: async () => (await bridge.runHelper<{ group: LinkGroup | null }>("get_link_group")).group ?? undefined,
-    setLinkGroup: async (group) => {
-      await bridge.runHelper("set_link_group", { group });
     },
     memoryRead: async () => {
       const snapshot = await memory.snapshot();

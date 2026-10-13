@@ -82,9 +82,8 @@ Each entry: decision, options weighed, why. Review in the morning.
     from all models since naming is text-only.
 22. **Playwright runs serially** (`workers: 1`): one fake-agent sidecar holds one
     conversation, so parallel specs interleaved their prompts and failed at random.
-23. **The pane's Link Pane Tab control is our own select** calling
-    `PaneTab.setLinkGroup` on the Pi tab: Houdini does not show its link widget on
-    Python Panel tabs. The agent-side follow logic reads the same value.
+23. **The agent-side follow logic reads the Pi tab's own link group**, set with
+    Houdini's built-in Link Pane Tab control.
 24. **Help (`?`) goes to GitHub Pages** (`docs/`, Jekyll minimal theme) at
     https://mortoc.github.io/houdini-pi/help; the `.pypanel` `help_url` is static
     and cannot point at the per-launch sidecar port.

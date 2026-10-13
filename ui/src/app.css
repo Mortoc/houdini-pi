@@ -15,15 +15,14 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 .pane { display: flex; flex-direction: column; height: 100%; }
 .toolbar { background: var(--panel); border-bottom: 1px solid #000; }
 .toolbar-row { display: flex; gap: 8px; align-items: center; padding: 5px 8px; }
-.toolbar-row + .toolbar-row { padding-top: 0; }
 .spacer { flex: 1; }
-.hip { font-weight: 700; font-size: 13px; }
-.session-name { color: var(--muted); }
-.tabs { display: flex; gap: 2px; }
+.hip { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.session-name { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabs { display: flex; gap: 2px; margin-left: 8px; }
 .tabs button { background: #1a1a1d; border: 1px solid #333; border-bottom: none; color: var(--muted); padding: 3px 12px; cursor: pointer; border-radius: 5px 5px 0 0; font-size: 12px; }
 .tabs button[aria-selected="true"] { color: var(--fg); background: var(--bg); border-color: #555; box-shadow: inset 0 2px 0 var(--accent); }
 .toolbar select, .toolbar button.new-session, .model-current { background: #333; color: var(--fg); border: 1px solid #444; border-radius: 4px; padding: 3px 8px; font: inherit; cursor: pointer; }
-.toolbar button.new-session { background: transparent; color: #7ed49a; border-color: #3f6b45; }
+.toolbar button.new-session { padding: 1px 9px; font-size: 15px; font-weight: 700; line-height: 1.2; background: transparent; color: #7ed49a; border-color: #3f6b45; }
 .toolbar button.new-session:hover { background: color-mix(in srgb, #7ed49a 12%, transparent); }
 .status { font-size: 11px; color: var(--muted); }
 .status-closed { color: var(--error); }
@@ -31,6 +30,7 @@ html, body, #root { height: 100%; margin: 0; background: var(--bg); color: var(-
 .dropdown-current { background: #333; color: var(--fg); border: 1px solid #444; border-radius: 4px; padding: 3px 8px; font: inherit; cursor: pointer; white-space: nowrap; }
 .dropdown-current:disabled { opacity: 0.5; cursor: default; }
 .dropdown-list { position: absolute; right: 0; top: 100%; z-index: 10; min-width: 100%; max-height: 50vh; overflow-y: auto; margin: 2px 0 0; padding: 4px 0; list-style: none; background: #1a1a1d; border: 1px solid #555; border-radius: 6px; box-shadow: 0 8px 24px #000a; }
+.dropdown-list.up { top: auto; bottom: 100%; margin: 0 0 2px; }
 .dropdown-list li { padding: 4px 12px; cursor: pointer; white-space: nowrap; }
 .dropdown-list li:hover { background: #2f3a4b; }
 .dropdown-list li[aria-selected="true"] { color: var(--accent); }
@@ -105,6 +105,10 @@ button.link { background: none; border: none; color: var(--accent); cursor: poin
 .chip-remove:hover { color: var(--fg); background: #3c4a60; }
 .prompt textarea { flex: 1; resize: none; background: #141416; color: var(--fg); border: 1px solid #444; border-radius: 6px; padding: 6px; font: inherit; }
 .prompt-actions { display: flex; flex-direction: column; gap: 4px; }
+.prompt-actions button[type="submit"] { flex: 1; }
+.prompt-actions .dropdown { align-self: stretch; }
+.prompt-actions .dropdown-current { width: 100%; font-size: 11px; font-weight: 400; padding: 3px 8px; color: var(--fg); background: #333; border-color: #444; }
+.prompt-actions .dropdown-current:hover { background: #3a3a3f; }
 .prompt button { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-weight: 600; }
 .prompt button:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .prompt button:disabled { opacity: 0.4; cursor: default; }

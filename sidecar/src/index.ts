@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import type { LinkGroup } from "@houdini-pi/protocol";
 import { createHoudiniExtension, DEFAULT_ASSETS_DIR, HoudiniBridge } from "@houdini-pi/pi-package";
 import type { AgentLike } from "./agent-like.js";
 import type { PiAgent as PiAgentType } from "./pi-agent.js";
@@ -46,13 +45,10 @@ export function parseCli(argv: string[]) {
 function fakeHoudini(): HoudiniPort {
   let memory = "## Conventions\n\n- metres everywhere\n";
   let prev: string | undefined;
-  let link: LinkGroup = "none";
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
     loadHip: async () => {},
     action: async () => {},
-    linkGroup: async () => link,
-    setLinkGroup: async (group) => { link = group; },
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),
     memoryReplace: async (text) => { prev = memory; memory = text; },
     memoryRollback: async () => { if (prev !== undefined) { memory = prev; prev = undefined; } },

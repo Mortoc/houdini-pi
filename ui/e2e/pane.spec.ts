@@ -13,7 +13,7 @@ test("connects, shows the hip and the default conversation name, streams a turn 
   await open(page);
   await expect(page.getByTestId("hip")).toHaveText("rock.hip");
   await expect(page.getByTestId("session-name")).toHaveText("New Conversation");
-  await expect(page.getByTestId("model-picker")).toContainText("Fake Fast");
+  await expect(page.getByTestId("model-picker")).toHaveText("Model: Default ▾");
 
   await page.getByTestId("prompt").fill("make the wires thinner");
   await page.getByTestId("send").click();
@@ -133,15 +133,11 @@ test("model picker searches and picks; thinking picker round-trips", async ({ pa
   await expect(popup.locator("li[role=option]")).toHaveCount(1);
   await page.getByTestId("model-search").press("Enter");
   await expect(page.getByTestId("model-popup")).toHaveCount(0);
-  await expect(page.getByTestId("model-picker")).toContainText("Fake Deep");
+  await expect(page.getByTestId("model-picker")).toHaveText("Model: Fake Deep ▾");
   await page.getByTestId("thinking-picker").click();
-  await page.getByTestId("thinking-picker-list").getByRole("option", { name: "thinking: high" }).click();
+  await page.getByTestId("thinking-picker-list").getByRole("option", { name: "high", exact: true }).click();
   await expect(page.getByTestId("thinking-picker")).toHaveAttribute("data-value", "high");
   await expect(page.getByTestId("thinking-picker-list")).toHaveCount(0);
-  await expect(page.getByTestId("link-picker")).toHaveAttribute("data-value", "none");
-  await page.getByTestId("link-picker").click();
-  await page.getByTestId("link-picker-list").getByRole("option", { name: "Link 2" }).click();
-  await expect(page.getByTestId("link-picker")).toHaveAttribute("data-value", "2");
 });
 
 test("memory tab shows, edits and rolls back the hip memory", async ({ page }) => {

@@ -135,21 +135,6 @@ def test_render_cop_refuses_non_cop_nodes_and_reports_a_missing_file(hou, tmp_pa
     assert copnet.children_created[0].destroyed is True
 
 
-def test_link_group_round_trips_through_the_pi_tab(hou):
-    assert hooks_target.get_link_group() == {"group": None}
-    hou.ui = FakeUI()
-    pi_tab = FakePaneTab(hou.paneTabType.PythonPanel, hou.paneLinkType.Pinned, interface="houdini_pi")
-    hou.ui.tabs = [pi_tab, FakeNodeTab(hou.paneTabType.NetworkEditor, hou.paneLinkType.Group3)]
-    assert hooks_target.get_link_group() == {"group": "none"}
-    assert hooks_target.set_link_group("3") == {"group": "3", "tabs": 1}
-    assert pi_tab.linkGroup() is hou.paneLinkType.Group3
-    assert hooks_target.get_link_group() == {"group": "3"}
-    hooks_target.set_link_group("selection")
-    assert pi_tab.linkGroup() is hou.paneLinkType.FollowSelection
-    with pytest.raises(ValueError, match="unknown link group name"):
-        hooks_target.set_link_group("12")
-
-
 def test_load_hip_opens_the_file_but_never_over_unsaved_edits(hou):
     assert hooks_target.load_hip("/scenes/other.hip") == {"hip": "/scenes/other.hip"}
     hou.hipFile = FakeHipFile("/scenes/rock.hip", "rock.hip", unsaved=True)

@@ -80,7 +80,7 @@ export function App() {
 
   return (
     <div className="pane" data-status={status} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-      <Toolbar state={state} status={status} send={send} tab={tab} onTab={openTab} />
+      <Toolbar state={state} status={status} send={send} tab={tab} onTab={openTab} onModelPicked={() => dispatch({ type: "model_picked" })} />
       {tab === "chat" && (
         <>
           <ChatLog
@@ -97,7 +97,7 @@ export function App() {
             }}
           />
           <ActivityBar activity={state.activity} streaming={state.isStreaming} onStop={() => send({ type: "abort" })} />
-          <PromptBox streaming={state.isStreaming} connected={status === "open"} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} draft={draft} onDraftChange={setDraft} />
+          <PromptBox streaming={state.isStreaming} connected={status === "open"} thinkingLevel={state.thinkingLevel} send={send} nodes={droppedNodes} onNodesChange={setDroppedNodes} draft={draft} onDraftChange={setDraft} />
         </>
       )}
       {tab === "memory" && <MemoryTab memory={state.memory} compaction={state.compaction} send={send} />}

@@ -4,6 +4,8 @@ import type { ModelRef } from "@houdini-pi/protocol";
 interface Props {
   models: ModelRef[];
   current: ModelRef | undefined;
+  /** False until the artist picks one: the button then reads "Default". */
+  picked: boolean;
   onPick: (model: ModelRef) => void;
 }
 
@@ -17,7 +19,7 @@ function matches(model: ModelRef, query: string): boolean {
 }
 
 /** A searchable model list: type to filter, arrows to move, Enter to pick. */
-export function ModelPicker({ models, current, onPick }: Props) {
+export function ModelPicker({ models, current, picked, onPick }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -44,7 +46,7 @@ export function ModelPicker({ models, current, onPick }: Props) {
     setQuery("");
   };
 
-  const label = current === undefined ? "no model" : `${current.provider} · ${current.name}`;
+  const label = current === undefined ? "Model: none" : `Model: ${picked ? current.name : "Default"}`;
   return (
     <div className="model-picker" ref={root}>
       <button type="button" className="model-current" data-testid="model-picker" title={current ? `${current.provider}/${current.id}` : "no model"} onClick={() => setOpen(!open)}>

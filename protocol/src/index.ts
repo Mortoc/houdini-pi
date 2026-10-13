@@ -29,9 +29,6 @@ export interface SessionRef {
   hip: string | undefined;
 }
 
-/** Houdini's Link Pane Tab choices: "none" (Pinned), "1".."9", or "selection" (Last Selected Node). */
-export type LinkGroup = "none" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "selection";
-
 export type HoudiniActionKind = "select" | "parm" | "network" | "pane" | "help";
 
 /** An answer the artist reads: Markdown whose houdini:// links the pane renders as buttons; `invalid` maps a link href to why it is disabled. */
@@ -62,7 +59,6 @@ export type ClientMessage =
   | { type: "memory_edit"; text: string }
   | { type: "undo_compaction" }
   | { type: "rename_session"; name: string }
-  | { type: "set_link_group"; group: LinkGroup }
   | { type: "houdini_action"; kind: HoudiniActionKind; value: string }
   | { type: "undo_turn" };
 
@@ -74,14 +70,12 @@ export interface HelloState {
   hip: string | undefined;
   sessionName: string | undefined;
   isStreaming: boolean;
-  linkGroup: LinkGroup | undefined;
 }
 
 export type ServerMessage =
   | ({ type: "hello" } & HelloState)
   | { type: "state"; model: ModelRef | undefined; thinkingLevel: ThinkingLevel; isStreaming: boolean }
   | { type: "session_name"; name: string | undefined }
-  | { type: "link_group"; group: LinkGroup | undefined }
   | { type: "user_message"; text: string }
   | { type: "text_delta"; delta: string }
   | { type: "thinking_delta"; delta: string }
@@ -131,7 +125,6 @@ const CLIENT_TYPES: Record<ClientMessage["type"], readonly string[]> = {
   memory_edit: ["text"],
   undo_compaction: [],
   rename_session: ["name"],
-  set_link_group: ["group"],
   houdini_action: ["kind", "value"],
   undo_turn: [],
 };
@@ -140,7 +133,6 @@ const SERVER_TYPES: Record<ServerMessage["type"], readonly string[]> = {
   hello: ["sessionId", "thinkingLevel", "isStreaming"],
   state: ["thinkingLevel", "isStreaming"],
   session_name: [],
-  link_group: [],
   user_message: ["text"],
   text_delta: ["delta"],
   thinking_delta: ["delta"],

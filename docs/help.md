@@ -15,14 +15,13 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
   always starts a new conversation; opening an earlier one also opens the hip
   it worked on (save your current scene first).
 - **Link Pane Tab**: put the Pi tab and a network editor or parameter view in
-  the same link group (1–9) and they follow the node the agent works on. *Last
-  Selected Node* works too, since the agent selects what it touches.
-- **Model**: type to search. Only models that can see images are listed, so
+  the same link group (1–9) and they follow the node the agent works on.
+- **Model**: shows "Default" until you pick one; type to search. Only models that can see images are listed, so
   the agent can check its own renders. A new conversation starts on the first
   available entry of `defaultModel` in the settings file (DeepSeek V4 Flash
   Vision by default); a resumed one keeps the model it had.
-- **thinking**: how much the model reasons before acting.
-- **New Conversation**: fresh context for the same hip.
+- **thinking** (under the send button): how much the model reasons before acting.
+- **+**: a new conversation, fresh context for the same hip.
 
 ## What a turn does
 

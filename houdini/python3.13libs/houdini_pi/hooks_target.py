@@ -140,44 +140,6 @@ def _pi_link_group(hou: Any):
     return tabs[0].linkGroup() if tabs else None
 
 
-def _link_name(hou: Any, group: Any) -> str:
-    if group == hou.paneLinkType.Pinned:
-        return "none"
-    if group == hou.paneLinkType.FollowSelection:
-        return "selection"
-    for n in range(1, 10):
-        if group == getattr(hou.paneLinkType, f"Group{n}"):
-            return str(n)
-    raise ValueError(f"unknown link group {group!r}")
-
-
-def _link_value(hou: Any, name: str) -> Any:
-    if name == "none":
-        return hou.paneLinkType.Pinned
-    if name == "selection":
-        return hou.paneLinkType.FollowSelection
-    if name in {str(n) for n in range(1, 10)}:
-        return getattr(hou.paneLinkType, f"Group{name}")
-    raise ValueError(f"unknown link group name {name!r}")
-
-
-def get_link_group() -> dict[str, Any]:
-    """The Pi pane's Link Pane Tab setting, as the pane's own control shows it."""
-    hou = _h()
-    group = _pi_link_group(hou)
-    return {"group": None if group is None else _link_name(hou, group)}
-
-
-def set_link_group(group: str) -> dict[str, Any]:
-    """Set every open Pi pane's link group; Houdini hides its own widget on Python Panel tabs."""
-    hou = _h()
-    value = _link_value(hou, group)
-    tabs = _pi_tabs(hou)
-    for tab in tabs:
-        tab.setLinkGroup(value)
-    return {"group": group, "tabs": len(tabs)}
-
-
 def follow_nodes(paths: list[str]) -> dict[str, Any]:
     """Make the scene follow the agent: select the last node it touched and, when the Pi pane
     is in a link group, point every pane tab in that group at it (network editors to its

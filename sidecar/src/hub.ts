@@ -1,4 +1,4 @@
-import { type ClientMessage, type HoudiniActionKind, type LinkGroup, type ServerMessage, decodeClient, encode, ProtocolError } from "@houdini-pi/protocol";
+import { type ClientMessage, type HoudiniActionKind, type ServerMessage, decodeClient, encode, ProtocolError } from "@houdini-pi/protocol";
 import type { WebSocket } from "ws";
 import type { AgentEvent, AgentLike } from "./agent-like.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
@@ -12,8 +12,6 @@ export interface HoudiniPort {
   loadHip(path: string): Promise<void>;
   /** One answer-button action in Houdini. */
   action(kind: HoudiniActionKind, value: string): Promise<void>;
-  linkGroup(): Promise<LinkGroup | undefined>;
-  setLinkGroup(group: LinkGroup): Promise<void>;
   memoryRead(): Promise<{ text: string; prevAvailable: boolean }>;
   memoryReplace(text: string): Promise<void>;
   memoryRollback(): Promise<void>;
@@ -56,10 +54,8 @@ export class SessionHub {
 
   private async sendHello(socket: SocketLike) {
     let hip: string | undefined;
-    let linkGroup: LinkGroup | undefined;
     try {
       hip = await this.houdini.hipPath();
-      linkGroup = await this.houdini.linkGroup();
     } catch (error) {
       this.sendTo(socket, errorMessage(error));
     }
@@ -83,7 +79,6 @@ export class SessionHub {
       hip,
       sessionName: this.agent.sessionName ?? DEFAULT_SESSION_NAME,
       isStreaming: this.agent.isStreaming,
-      linkGroup,
     });
     this.sendTo(socket, { type: "history", messages: this.agent.getHistory() });
   }
@@ -242,10 +237,6 @@ export class SessionHub {
         return;
       case "houdini_action":
         await this.houdini.action(message.kind, message.value);
-        return;
-      case "set_link_group":
-        await this.houdini.setLinkGroup(message.group);
-        this.broadcast({ type: "link_group", group: await this.houdini.linkGroup() });
         return;
       case "rename_session":
         this.agent.setSessionName(message.name);

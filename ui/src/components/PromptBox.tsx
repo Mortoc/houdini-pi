@@ -1,9 +1,13 @@
 import type { KeyboardEvent } from "react";
-import type { ClientMessage } from "@houdini-pi/protocol";
+import type { ClientMessage, ThinkingLevel } from "@houdini-pi/protocol";
+import { Dropdown } from "./Dropdown.js";
+
+const LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 interface Props {
   streaming: boolean;
   connected: boolean;
+  thinkingLevel: ThinkingLevel;
   send: (message: ClientMessage) => void;
   nodes: string[];
   onNodesChange: (nodes: string[]) => void;
@@ -11,7 +15,7 @@ interface Props {
   onDraftChange: (text: string) => void;
 }
 
-export function PromptBox({ streaming, connected, send, nodes, onNodesChange, draft, onDraftChange }: Props) {
+export function PromptBox({ streaming, connected, thinkingLevel, send, nodes, onNodesChange, draft, onDraftChange }: Props) {
   const submit = () => {
     const trimmed = draft.trim();
     const nothing = trimmed.length === 0 && nodes.length === 0;
@@ -58,6 +62,16 @@ export function PromptBox({ streaming, connected, send, nodes, onNodesChange, dr
         <button type="submit" data-testid="send" disabled={!connected}>
           {streaming ? "steer" : "send"}
         </button>
+        <Dropdown<ThinkingLevel>
+          label="thinking level"
+          testId="thinking-picker"
+          title="How much the model reasons before acting"
+          prefix="thinking: "
+          up
+          value={thinkingLevel}
+          options={LEVELS.map((level) => ({ value: level, label: level }))}
+          onChange={(level) => send({ type: "set_thinking", level })}
+        />
       </div>
     </form>
   );

@@ -1,4 +1,4 @@
-import type { Answer, HelloState, LinkGroup, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
+import type { Answer, HelloState, ModelRef, ServerMessage, SessionRef, ThinkingLevel } from "@houdini-pi/protocol";
 
 export interface ToolCall {
   toolCallId: string;
@@ -21,8 +21,9 @@ export interface PaneState {
   model: ModelRef | undefined;
   thinkingLevel: ThinkingLevel;
   isStreaming: boolean;
+  /** Whether the artist picked a model in this conversation; otherwise the pane shows the default. */
+  modelPicked: boolean;
   sessionName: string;
-  linkGroup: LinkGroup | undefined;
   entries: Entry[];
   models: ModelRef[];
   sessions: SessionRef[];
@@ -38,8 +39,8 @@ export const initialState: PaneState = {
   model: undefined,
   thinkingLevel: "medium",
   isStreaming: false,
+  modelPicked: false,
   sessionName: "New Conversation",
-  linkGroup: undefined,
   entries: [],
   models: [],
   sessions: [],
@@ -64,10 +65,12 @@ function updateLastAssistant(entries: Entry[], update: (entry: Extract<Entry, { 
   return [...withOpen.slice(0, -1), update(last)];
 }
 
-export type LocalAction = { type: "drop_last_turn" };
+export type LocalAction = { type: "drop_last_turn" } | { type: "model_picked" };
 
 export function reduce(state: PaneState, message: ServerMessage | LocalAction): PaneState {
   switch (message.type) {
+    case "model_picked":
+      return { ...state, modelPicked: true };
     case "drop_last_turn": {
       const lastUserIndex = state.entries.map((e) => e.kind).lastIndexOf("user");
       if (lastUserIndex === -1) return state;
@@ -75,7 +78,7 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
     }
     case "hello": {
       const { type: _type, ...hello } = message;
-      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, sessionName: hello.sessionName ?? "New Conversation", linkGroup: hello.linkGroup, entries: [], lastTurn: undefined };
+      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, modelPicked: false, sessionName: hello.sessionName ?? "New Conversation", entries: [], lastTurn: undefined };
     }
     case "history":
       return {
@@ -90,8 +93,6 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
       return { ...state, model: message.model, thinkingLevel: message.thinkingLevel, isStreaming: message.isStreaming, activity: message.isStreaming ? state.activity ?? "working" : undefined };
     case "session_name":
       return { ...state, sessionName: message.name ?? "New Conversation" };
-    case "link_group":
-      return { ...state, linkGroup: message.group };
     case "user_message":
       return { ...state, isStreaming: true, activity: "waiting for the model", entries: [...state.entries, { kind: "user", id: nextId++, text: message.text }] };
     case "text_delta":

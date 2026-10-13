@@ -13,6 +13,10 @@ interface Props<T extends string> {
   testId: string;
   disabled?: boolean;
   title?: string;
+  /** Shown before the current value on the button only, not in the list. */
+  prefix?: string;
+  /** Open the list above the button, for controls at the bottom of the pane. */
+  up?: boolean;
 }
 
 /**
@@ -21,7 +25,7 @@ interface Props<T extends string> {
  * the list opened far from the control; this one is a plain absolutely
  * positioned list inside the page.
  */
-export function Dropdown<T extends string>({ value, options, onChange, label, testId, disabled, title }: Props<T>) {
+export function Dropdown<T extends string>({ value, options, onChange, label, testId, disabled, title, prefix, up }: Props<T>) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const current = options.find((o) => o.value === value);
@@ -56,10 +60,10 @@ export function Dropdown<T extends string>({ value, options, onChange, label, te
         title={title}
         onClick={() => setOpen(!open)}
       >
-        {current?.label ?? value} ▾
+        {prefix}{current?.label ?? value} ▾
       </button>
       {open && (
-        <ul className="dropdown-list" role="listbox" aria-label={label} data-testid={`${testId}-list`}>
+        <ul className={up ? "dropdown-list up" : "dropdown-list"} role="listbox" aria-label={label} data-testid={`${testId}-list`}>
           {options.map((option) => (
             <li
               key={option.value}

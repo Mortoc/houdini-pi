@@ -31,8 +31,6 @@ export interface SessionRef {
   name: string | undefined;
   firstMessage: string;
   modified: number;
-  /** The hip the conversation worked on; loading the session loads it. */
-  hip: string | undefined;
 }
 
 export type HoudiniActionKind = "select" | "parm" | "network" | "pane" | "help";
@@ -79,6 +77,8 @@ export interface HelloState {
   hip: string | undefined;
   sessionName: string | undefined;
   isStreaming: boolean;
+  /** What the conversation has cost so far, USD. */
+  cost: number;
 }
 
 export type ServerMessage =

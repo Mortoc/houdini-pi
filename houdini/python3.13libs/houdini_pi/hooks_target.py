@@ -8,12 +8,14 @@ be tested with a fake injected via `set_hou`.
 from __future__ import annotations
 
 import importlib
+import json
 import os
 from pathlib import Path
 from typing import Any
 
 MEMORY_KEY = "houdini_pi.memory"
 MEMORY_PREV_KEY = "houdini_pi.memory.prev"
+SESSIONS_KEY = "houdini_pi.sessions"
 
 
 def _patch_dispatcher_no_undo_group() -> bool:
@@ -142,6 +144,36 @@ def memory_write(text: str, prev: str | None) -> dict[str, Any]:
     elif root.userData(MEMORY_PREV_KEY) is not None:
         root.destroyUserData(MEMORY_PREV_KEY)
     return {"chars": len(text), "prev": bool(prev)}
+
+
+def _sessions_of(root: Any) -> list[str]:
+    try:
+        parsed = json.loads(root.userData(SESSIONS_KEY) or "[]")
+    except ValueError:
+        return []
+    return [p for p in parsed if isinstance(p, str)] if isinstance(parsed, list) else []
+
+
+def sessions_read() -> dict[str, Any]:
+    """The conversations this hip has had, as pi session file paths.
+
+    Kept on the root node's user data like hip memory, so Save As carries the
+    list into the new file and the sessions tab there shows the same history.
+    """
+    return {"sessions": _sessions_of(_h().node("/"))}
+
+
+def session_tag(path: str) -> dict[str, Any]:
+    """Record a conversation on this hip. Outside undo: Ctrl-Z after a turn must undo the turn, not this."""
+    hou = _h()
+    root = hou.node("/")
+    sessions = _sessions_of(root)
+    if path in sessions:
+        return {"sessions": sessions}
+    sessions.append(path)
+    with hou.undos.disabler():
+        root.setUserData(SESSIONS_KEY, json.dumps(sessions))
+    return {"sessions": sessions}
 
 
 PROJECT_MEMORY_DIR = ".houdini-pi"

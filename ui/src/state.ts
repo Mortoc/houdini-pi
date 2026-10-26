@@ -24,6 +24,8 @@ export interface PaneState {
   /** Whether the artist picked a model in this conversation; otherwise the pane shows the default. */
   modelPicked: boolean;
   sessionName: string;
+  /** The conversation's cost so far, USD. */
+  cost: number;
   entries: Entry[];
   models: ModelRef[];
   sessions: SessionRef[];
@@ -45,6 +47,7 @@ export const initialState: PaneState = {
   isStreaming: false,
   modelPicked: false,
   sessionName: "New Conversation",
+  cost: 0,
   entries: [],
   models: [],
   recommendedModels: [],
@@ -85,7 +88,7 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
     }
     case "hello": {
       const { type: _type, ...hello } = message;
-      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, modelPicked: false, sessionName: hello.sessionName ?? "New Conversation", entries: [], lastTurn: undefined };
+      return { ...state, hello, model: hello.model, thinkingLevel: hello.thinkingLevel, isStreaming: hello.isStreaming, modelPicked: false, sessionName: hello.sessionName ?? "New Conversation", cost: hello.cost, entries: [], lastTurn: undefined };
     }
     case "history":
       return {
@@ -137,7 +140,9 @@ export function reduce(state: PaneState, message: ServerMessage | LocalAction): 
     case "settled": {
       const entries = state.entries.map((e): Entry => (e.kind === "assistant" && e.streaming ? { ...e, streaming: false, text: message.aborted && e.text === "" ? "(aborted)" : e.text } : e));
       const errors = state.entries.filter((e): e is Extract<Entry, { kind: "assistant" }> => e.kind === "assistant" && e.streaming).flatMap((e) => e.tools).filter((t) => t.isError).length;
-      return { ...state, isStreaming: false, activity: undefined, entries, lastTurn: { cost: message.cost, durationMs: message.durationMs, aborted: message.aborted, errors } };
+      // settled carries the conversation's total; the turn line shows this turn's share.
+      const turnCost = Math.max(0, message.cost - state.cost);
+      return { ...state, isStreaming: false, activity: undefined, entries, cost: message.cost, lastTurn: { cost: turnCost, durationMs: message.durationMs, aborted: message.aborted, errors } };
     }
     case "models":
       return { ...state, models: message.models, recommendedModels: message.recommended, defaultModel: message.defaultModel };

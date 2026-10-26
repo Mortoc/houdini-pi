@@ -14,15 +14,14 @@ interface Props {
 }
 
 export function Toolbar({ state, status, send, tab, onTab, onModelPicked }: Props) {
-  const hip = state.hello?.hip?.split("/").at(-1) ?? "untitled";
   return (
     <header className="toolbar">
       <div className="toolbar-row">
-        <strong className="hip" title={state.hello?.hip ?? "untitled scene"} data-testid="hip">
-          {hip}
-        </strong>
         <span className="session-name" data-testid="session-name" title="Named automatically from the conversation">
           {state.sessionName}
+        </span>
+        <span className="session-cost" data-testid="session-cost" title="What this conversation has cost so far">
+          ${state.cost.toFixed(3)}
         </span>
         <nav className="tabs" role="tablist">
           {(["chat", "memory", "sessions"] as const).map((name) => (

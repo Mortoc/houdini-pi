@@ -109,7 +109,7 @@ export class FakeAgent implements AgentLike {
   async switchSession(sessionPath: string) { this.calls.push(`switch:${sessionPath}`); this.sessionPath = sessionPath; }
   async fork(entryId: string) { this.calls.push(`fork:${entryId}`); }
   async listSessions(): Promise<SessionRef[]> {
-    return [{ id: this.sessionId, path: this.sessionPath ?? "", name: this.sessionName, firstMessage: this.history[0]?.text ?? "", modified: Date.now(), hip: undefined }];
+    return [{ id: this.sessionId, path: this.sessionPath ?? "", name: this.sessionName, firstMessage: this.history[0]?.text ?? "", modified: Date.now() }];
   }
   async compact() { this.calls.push("compact"); }
   getHistory() { return [...this.history]; }

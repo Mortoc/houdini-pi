@@ -14,8 +14,9 @@ export function houdiniPort(bridge: HoudiniBridge): HoudiniPort {
     action: async (kind, value) => {
       await bridge.runHelper("do_action", { kind, value });
     },
-    loadHip: async (path) => {
-      await bridge.runHelper("load_hip", { path });
+    hipSessions: async () => (await bridge.runHelper<{ sessions: string[] }>("sessions_read")).sessions,
+    tagSession: async (sessionPath) => {
+      await bridge.runHelper("session_tag", { path: sessionPath });
     },
     memoryRead: async () => {
       const snapshot = await memory.snapshot();

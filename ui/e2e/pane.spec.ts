@@ -9,9 +9,9 @@ async function open(page: import("@playwright/test").Page) {
   await expect(page.getByTestId("send")).toHaveText("send");
 }
 
-test("connects, shows the hip and the default conversation name, streams a turn with a tool card", async ({ page }) => {
+test("connects, shows the conversation name and cost, streams a turn with a tool card", async ({ page }) => {
   await open(page);
-  await expect(page.getByTestId("hip")).toHaveText("rock.hip");
+  await expect(page.getByTestId("session-cost")).toHaveText(/^\$\d+\.\d{3}$/);
   await expect(page.getByTestId("session-name")).toHaveText("New Conversation");
   await expect(page.getByTestId("model-picker")).toHaveText("Model: Default ▾");
 

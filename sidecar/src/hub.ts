@@ -9,8 +9,10 @@ import { DEFAULT_SETTINGS, type Settings } from "./settings.js";
 /** What the hub needs from Houdini beyond the agent: memory and undo, both bridge-backed. */
 export interface HoudiniPort {
   hipPath(): Promise<string | undefined>;
-  /** Open a hip in Houdini. Rejects when the current scene has unsaved changes. */
-  loadHip(path: string): Promise<void>;
+  /** The session files this hip has had conversations in, kept inside the hip so Save As carries them. */
+  hipSessions(): Promise<string[]>;
+  /** Record a conversation on the current hip. */
+  tagSession(sessionPath: string): Promise<void>;
   /** One answer-button action in Houdini. */
   action(kind: HoudiniActionKind, value: string): Promise<void>;
   memoryRead(): Promise<{ text: string; prevAvailable: boolean }>;
@@ -48,8 +50,8 @@ export class SessionHub {
     settings: Settings = DEFAULT_SETTINGS,
     /** Called when a pane opens on a different hip than the conversation was started for. */
     private readonly onHipChanged?: (hip: string | undefined) => Promise<void>,
-    /** The hip a listed session worked on, from the host's index. */
-    private readonly hipOfSession: (sessionPath: string) => string | undefined = () => undefined,
+    /** Sessions recorded for a hip before the list lived in the hip (the old ~/.houdini-pi/sessions.json). */
+    private readonly legacySessionsOf: (hip: string) => string[] = () => [],
   ) {
     this.namer = new SessionNamer(agent, settings.naming);
     this.defaultModelCandidates = settings.defaultModel;
@@ -90,6 +92,7 @@ export class SessionHub {
       hip,
       sessionName: this.agent.sessionName ?? DEFAULT_SESSION_NAME,
       isStreaming: this.agent.isStreaming,
+      cost: this.agent.getStats().cost,
     });
     this.sendTo(socket, { type: "history", messages: this.agent.getHistory() });
   }
@@ -151,6 +154,7 @@ export class SessionHub {
         const durationMs = this.promptStartedAt === undefined ? 0 : Date.now() - this.promptStartedAt;
         this.promptStartedAt = undefined;
         this.broadcast({ type: "settled", aborted: event.aborted, cost: this.agent.getStats().cost, durationMs });
+        void this.remember();
         this.broadcast(this.state());
         if (!event.aborted) {
           this.namer
@@ -165,6 +169,19 @@ export class SessionHub {
       case "model_changed":
         this.broadcast(this.state());
         return;
+    }
+  }
+
+  /** After every turn: record the conversation on the hip, and pick up a Save As
+   *  (the path changes without a reconnect) so the next reconnect does not
+   *  mistake it for a different scene. */
+  private async remember() {
+    try {
+      const hip = await this.houdini.hipPath();
+      if (hip !== undefined) this.currentHip = hip;
+      if (this.agent.sessionPath !== undefined) await this.houdini.tagSession(this.agent.sessionPath);
+    } catch (error) {
+      this.broadcast({ type: "error", message: `could not record this conversation on the hip: ${(error as Error).message}` });
     }
   }
 
@@ -205,20 +222,11 @@ export class SessionHub {
         await this.agent.newSession();
         await this.sendHello(socket);
         return;
-      case "switch_session": {
-        // The conversation belongs to a scene: load that hip too. Switch first,
-        // so the pane that reconnects after Houdini rebuilds its desktop finds
-        // the conversation already matching the hip.
-        const hip = this.hipOfSession(message.sessionPath);
-        const hip_differs = hip !== undefined && hip !== this.currentHip;
+      case "switch_session":
+        // Only this hip's conversations are listed, so switching never changes the scene.
         await this.agent.switchSession(message.sessionPath);
-        if (hip_differs) {
-          this.currentHip = hip;
-          await this.houdini.loadHip(hip);
-        }
         await this.sendHello(socket);
         return;
-      }
       case "fork":
         await this.agent.fork(message.entryId);
         await this.sendHello(socket);
@@ -238,7 +246,9 @@ export class SessionHub {
         this.sendTo(socket, await this.modelsMessage());
         return;
       case "list_sessions": {
-        const sessions = (await this.agent.listSessions()).map((session) => ({ ...session, hip: this.hipOfSession(session.path) }));
+        const hip = await this.houdini.hipPath();
+        const ours = new Set([...(await this.houdini.hipSessions()), ...(hip === undefined ? [] : this.legacySessionsOf(hip))]);
+        const sessions = (await this.agent.listSessions()).filter((session) => ours.has(session.path));
         this.sendTo(socket, { type: "sessions", sessions });
         return;
       }
@@ -275,6 +285,12 @@ export class SessionHub {
         return;
     }
   }
+}
+
+/** File ▸ Open: keep the conversation only if the opened hip has had it, else start a fresh one. */
+export async function followHip(agent: AgentLike, houdini: Pick<HoudiniPort, "hipSessions">): Promise<void> {
+  const belongs = agent.sessionPath !== undefined && (await houdini.hipSessions()).includes(agent.sessionPath);
+  if (!belongs) await agent.newSession();
 }
 
 export function errorMessage(error: unknown): ServerMessage {

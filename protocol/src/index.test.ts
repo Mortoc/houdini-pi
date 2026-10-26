@@ -24,7 +24,7 @@ const clientMessages: ClientMessage[] = [
 ];
 
 const serverMessages: ServerMessage[] = [
-  { type: "hello", sessionId: "s", sessionPath: undefined, model: undefined, thinkingLevel: "off", hip: undefined, sessionName: undefined, isStreaming: false },
+  { type: "hello", sessionId: "s", sessionPath: undefined, model: undefined, thinkingLevel: "off", hip: undefined, sessionName: undefined, isStreaming: false, cost: 0 },
   { type: "state", model: undefined, thinkingLevel: "low", isStreaming: true },
   { type: "session_name", name: "Env light" },
   { type: "user_message", text: "hi" },
@@ -38,7 +38,7 @@ const serverMessages: ServerMessage[] = [
   { type: "turn_end", turnIndex: 0 },
   { type: "settled", aborted: false, cost: 0.01, durationMs: 1200 },
   { type: "models", models: [], recommended: [] },
-  { type: "sessions", sessions: [{ id: "s", path: "/p.jsonl", name: undefined, firstMessage: "hi", modified: 1, hip: "/a.hip" }] },
+  { type: "sessions", sessions: [{ id: "s", path: "/p.jsonl", name: undefined, firstMessage: "hi", modified: 1 }] },
   { type: "memory", text: "", prevAvailable: false },
   { type: "memory_compacted", before: 20000, after: 7000 },
   { type: "error", message: "boom", action: "reconnect" },

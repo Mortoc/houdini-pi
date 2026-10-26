@@ -298,3 +298,24 @@ def test_capture_viewport_checks_every_displayed_object_at_object_level(hou, ups
     assert "/obj/c/OUT: bad file" in str(raised.value)
     assert "/obj/b/OUT" not in str(raised.value)  # not drawn, so not this capture's problem
     assert calls == []
+
+
+def test_sessions_are_tagged_on_the_hip_once_and_outside_undo(hou):
+    assert hooks_target.sessions_read() == {"sessions": []}
+    hooks_target.session_tag("/sessions/a.jsonl")
+    hooks_target.session_tag("/sessions/b.jsonl")
+    hooks_target.session_tag("/sessions/a.jsonl")
+    assert hooks_target.sessions_read() == {"sessions": ["/sessions/a.jsonl", "/sessions/b.jsonl"]}
+    assert hou.undos.log == ["enter:disabled", "exit:disabled"] * 2
+
+
+def test_corrupt_session_list_reads_as_empty(hou):
+    hou.root.setUserData(hooks_target.SESSIONS_KEY, "{bad")
+    assert hooks_target.sessions_read() == {"sessions": []}
+
+
+def test_session_list_survives_save_as(hou):
+    # The list is user data on /, so it is written into whatever file the scene is saved as.
+    hooks_target.session_tag("/sessions/a.jsonl")
+    hou.hipFile._path, hou.hipFile._basename = "/scenes/ship02.hiplc", "ship02.hiplc"
+    assert hooks_target.sessions_read() == {"sessions": ["/sessions/a.jsonl"]}

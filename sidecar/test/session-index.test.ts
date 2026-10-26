@@ -5,23 +5,21 @@ import { describe, expect, it } from "vitest";
 import { SessionIndex } from "../src/session-index.js";
 
 describe("SessionIndex", () => {
-  it("tags a session with its hip, creating the directory", () => {
-    const file = join(mkdtempSync(join(tmpdir(), "houdini-pi-index-")), "nested", "sessions.json");
-    const index = new SessionIndex(file);
-    expect(index.hipOf("/sessions/1.jsonl")).toBeUndefined();
-    index.tag("/sessions/1.jsonl", "/scenes/a.hip");
-    index.tag("/sessions/2.jsonl", "/scenes/b.hip");
-    expect(new SessionIndex(file).hipOf("/sessions/1.jsonl")).toBe("/scenes/a.hip");
-    expect(new SessionIndex(file).hipOf("/sessions/2.jsonl")).toBe("/scenes/b.hip");
+  it("lists the sessions an older sidecar recorded for a hip", () => {
+    const dir = mkdtempSync(join(tmpdir(), "houdini-pi-index-"));
+    const file = join(dir, "sessions.json");
+    writeFileSync(file, JSON.stringify({ "/sessions/1.jsonl": { hip: "/scenes/a.hip" }, "/sessions/2.jsonl": { hip: "/scenes/b.hip" }, "/sessions/3.jsonl": { hip: "/scenes/a.hip" } }));
+    expect(new SessionIndex(file).sessionsOf("/scenes/a.hip")).toEqual(["/sessions/1.jsonl", "/sessions/3.jsonl"]);
+    expect(new SessionIndex(join(dir, "missing.json")).sessionsOf("/scenes/a.hip")).toEqual([]);
   });
 
   it("ignores the old hip-hash layout and refuses a corrupt file", () => {
     const dir = mkdtempSync(join(tmpdir(), "houdini-pi-index-"));
     const old = join(dir, "old.json");
     writeFileSync(old, JSON.stringify({ abcd1234: "/sessions/1.jsonl" }));
-    expect(new SessionIndex(old).hipOf("/sessions/1.jsonl")).toBeUndefined();
+    expect(new SessionIndex(old).sessionsOf("/sessions/1.jsonl")).toEqual([]);
     const corrupt = join(dir, "sessions.json");
     writeFileSync(corrupt, "{not json");
-    expect(() => new SessionIndex(corrupt).hipOf("/x")).toThrow(/unreadable/);
+    expect(() => new SessionIndex(corrupt).sessionsOf("/x")).toThrow(/unreadable/);
   });
 });

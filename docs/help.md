@@ -8,13 +8,12 @@ A chat pane whose agent edits your live scene. Every turn is one Ctrl-Z.
 
 ## The pane
 
-- **Filename · conversation name**: the hip you are in, and the name the
-  conversation got after your first message.
+- **Conversation name · cost**: the name the conversation got after your
+  first message, and what it has cost so far (USD).
 - **chat / memory / sessions**: the conversation, the hip memory stored
   in this .hip (plus the project memory shared across $JOB), and earlier
-  conversations grouped by scene. Opening the pane
-  always starts a new conversation; opening an earlier one also opens the hip
-  it worked on (save your current scene first).
+  conversations this hip has had (stored in the .hip, so Save As keeps them).
+  Opening the pane always starts a new conversation.
 - **Link Pane Tab**: put the Pi tab and a network editor or parameter view in
   the same link group (1–9) and they follow the node the agent works on.
 - **Model**: shows "Default" until you pick one; type to search. Only models that can see images are listed, so

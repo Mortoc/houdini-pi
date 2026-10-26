@@ -131,6 +131,9 @@ class FakeUndos:
     def group(self, label: str) -> FakeGroup:
         return FakeGroup(self.log, label)
 
+    def disabler(self) -> FakeGroup:
+        return FakeGroup(self.log, "disabled")
+
 
 class FakeHipFile:
     def __init__(self, path: str = "/scenes/rock.hip", basename: str = "rock.hip", unsaved: bool = False):

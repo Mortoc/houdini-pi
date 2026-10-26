@@ -8,7 +8,7 @@ import type { AgentLike } from "./agent-like.js";
 import type { PiAgent as PiAgentType } from "./pi-agent.js";
 import { FakeAgent } from "./fake-agent.js";
 import { houdiniPort } from "./houdini-port.js";
-import { SessionHub, type HoudiniPort } from "./hub.js";
+import { followHip, SessionHub, type HoudiniPort } from "./hub.js";
 import { LOOPBACK, startServer } from "./server.js";
 import { SessionIndex } from "./session-index.js";
 import { loadSettings } from "./settings.js";
@@ -56,9 +56,11 @@ function fakeHoudini(): HoudiniPort {
   let prev: string | undefined;
   let projectMemory = "## Pipeline\n\n- renders go to /show/renders\n";
   let projectPrev: string | undefined;
+  const sessions: string[] = [];
   return {
     hipPath: async () => "/fake/scenes/rock.hip",
-    loadHip: async () => {},
+    hipSessions: async () => [...sessions],
+    tagSession: async (path) => { if (!sessions.includes(path)) sessions.push(path); },
     action: async () => {},
     memoryRead: async () => ({ text: memory, prevAvailable: prev !== undefined }),
     memoryReplace: async (text) => { prev = memory; memory = text; },
@@ -81,10 +83,10 @@ export async function main(argv = process.argv.slice(2)) {
     houdini = fakeHoudini();
     hub = new SessionHub(agent, houdini, settings);
   } else {
-    const bridge = new HoudiniBridge(cli.houdiniPort);
+    // Pinned to the Houdini that spawned us: with two Houdinis open, a port can belong to the other one.
+    const bridge = new HoudiniBridge(cli.houdiniPort, fetch, undefined, cli.parentPid);
     houdini = houdiniPort(bridge);
     const index = new SessionIndex();
-    const hip = await houdini.hipPath().catch(() => undefined);
     const { PiAgent } = await import("./pi-agent.js");
     let hubRef: SessionHub | undefined;
     let piAgent: PiAgentType | undefined;
@@ -112,36 +114,14 @@ export async function main(argv = process.argv.slice(2)) {
       onExtensionError: (error) => hubRef?.broadcast({ type: "error", message: `extension error: ${String(error)}` }),
     });
     agent = piAgent;
-    let currentHip = hip;
-    // Fetch the hip fresh each turn: Save As changes the path without a
-    // reconnect, so the cached value goes stale and the session would be
-    // tagged with the old file. The hub's cache is updated too, so the next
-    // reconnect does not think the hip changed.
-    const remember = async () => {
-      const fresh = await houdini.hipPath().catch(() => undefined);
-      if (fresh !== undefined) {
-        currentHip = fresh;
-        hubRef?.setHip(fresh);
-      }
-      if (currentHip !== undefined && agent.sessionPath !== undefined) index.tag(agent.sessionPath, currentHip);
-    };
     hub = new SessionHub(
       agent,
       houdini,
       settings,
-      async (nextHip) => {
-        currentHip = nextHip;
-        // A session switch that loaded its own hip arrives here too; that one
-        // already matches and keeps its conversation.
-        const matches = agent.sessionPath !== undefined && index.hipOf(agent.sessionPath) === nextHip;
-        if (!matches) await agent.newSession();
-      },
-      (sessionPath) => index.hipOf(sessionPath),
+      () => followHip(agent, houdini),
+      (hip) => index.sessionsOf(hip),
     );
     hubRef = hub;
-    agent.subscribe((event) => {
-      if (event.type === "agent_settled") void remember();
-    });
   }
 
   const server = await startServer({

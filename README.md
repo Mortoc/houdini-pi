@@ -60,8 +60,9 @@ is the package file to install with home-manager.
 - **Backups**: a Houdini backup is written before the first edit of each turn.
 - **Memory tab**: markdown stored in the hip and shown to the agent every turn.
   Decisions, conventions, node roles. Edit it directly.
-- **Sessions tab**: earlier conversations, grouped by scene. Opening the pane
-  always starts a new conversation; opening an old one also opens its hip.
+- **Sessions tab**: this hip's earlier conversations. The list is stored in the
+  hip, so Save As carries it to the new file. Opening the pane always starts a
+  new conversation. The toolbar shows what the conversation has cost so far.
 - **Models**: searchable picker; only image-capable models are listed. Your
   current model is first, then **Recommended** (the `defaultModel` list below),
   then the rest. New conversations start on the first recommended model pi can

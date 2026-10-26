@@ -15,15 +15,20 @@ import json
 from PySide6 import QtCore, QtWidgets
 
 from houdini_pi import drops, sidecar
-from houdini_pi.sidecar import auto_layout_wanted, software_render_wanted
+from houdini_pi.sidecar import auto_layout_wanted, pane_zoom, software_render_wanted
 
-BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
 POLL_MS = 250
 GIVE_UP_AFTER_POLLS = 120
 
 
-def houdini_bridge_port() -> int:
-    return int(os.environ.get(BRIDGE_PORT_ENV, "8100"))
+def _houdini_zoom() -> float:
+    """Zoom for the page so it matches Houdini's Global UI Size preference."""
+    try:
+        import hou
+
+        return pane_zoom(hou.ui.globalScaleFactor())
+    except Exception:  # no UI (hython) or an old hou: render at 1x
+        return 1.0
 
 
 def _apply_auto_layout() -> None:
@@ -79,22 +84,36 @@ class AgentPane(QtWidgets.QStackedWidget):
         self._timer.setInterval(POLL_MS)
         self._timer.timeout.connect(self._poll)
         self._pending: sidecar.Pending | None = None
+        self._bridge_polls = 0
         _apply_auto_layout()
+        self._timer.start()
+        self._poll()
+
+    def _start(self, bridge_port: int):
         try:
-            started = sidecar.start_sidecar(os.getpid(), houdini_bridge_port())
+            started = sidecar.start_sidecar(os.getpid(), bridge_port)
         except Exception:
+            self._timer.stop()
             self._fail(traceback.format_exc())
             return
         if isinstance(started, str):
+            self._timer.stop()
             self._show(started)
         else:
             self._pending = started
-            self._timer.start()
 
     def _poll(self):
         pending = self._pending
         if pending is None:
-            self._timer.stop()
+            # The bridge may still be starting when the desktop builds this pane.
+            port = sidecar.bridge_port()
+            if port is not None:
+                self._start(port)
+                return
+            self._bridge_polls += 1
+            if self._bridge_polls >= GIVE_UP_AFTER_POLLS:
+                self._timer.stop()
+                self._fail(f"Houdini's fxhoudinimcp bridge did not start within {GIVE_UP_AFTER_POLLS * POLL_MS // 1000}s.")
             return
         url = pending.url_if_ready()
         if url is not None:
@@ -117,9 +136,18 @@ class AgentPane(QtWidgets.QStackedWidget):
         # Glue the page: no navigation away from the agent, ever.
         view.setPage(_GluedPage(url, view))
         self._drops = DropForwarder(view)
+        # Follow Houdini's Global UI Size. Chromium can reset zoom on load, so
+        # set it again once the page is in.
+        zoom = _houdini_zoom()
+        view.setZoomFactor(zoom)
+        view.loadFinished.connect(lambda _ok: view.setZoomFactor(zoom))
         view.setUrl(QtCore.QUrl(url))
         self.addWidget(view)
         self.setCurrentWidget(view)
+
+    def _fail(self, text: str):
+        self._label.setText(text)
+        self.setCurrentWidget(self._label)
 
 
 def _keep_the_pane_off_the_gpu():
@@ -184,10 +212,6 @@ class DropForwarder(QtCore.QObject):
         event.acceptProposedAction()
         self._view.page().runJavaScript(f"window.houdiniPiDrop && window.houdiniPiDrop({json.dumps(paths)})")
         return True
-
-    def _fail(self, text: str):
-        self._label.setText(text)
-        self.setCurrentWidget(self._label)
 
 
 def _tail(path, lines: int = 20) -> str:

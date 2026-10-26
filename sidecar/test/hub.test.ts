@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeServer, encode, type ServerMessage } from "@houdini-pi/protocol";
 import { FakeAgent } from "../src/fake-agent.js";
 import { BridgeUnreachable } from "@houdini-pi/pi-package";
-import { SessionHub, type HoudiniPort, type SocketLike } from "../src/hub.js";
+import { followHip, SessionHub, type HoudiniPort, type SocketLike } from "../src/hub.js";
 import { DEFAULT_SETTINGS } from "../src/settings.js";
 
 class FakeSocket implements SocketLike {
@@ -21,7 +21,7 @@ class FakeSocket implements SocketLike {
   }
 }
 
-type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; projectMemory: string; projectPrev: string | undefined; undos: number; loaded: string[]; actions: string[] };
+type FakeHoudini = HoudiniPort & { memory: string; prev: string | undefined; projectMemory: string; projectPrev: string | undefined; undos: number; sessions: string[]; actions: string[] };
 
 function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
   const port: FakeHoudini = {
@@ -30,10 +30,11 @@ function fakeHoudini(overrides: Partial<HoudiniPort> = {}): FakeHoudini {
     projectMemory: "# Project\n",
     projectPrev: undefined as string | undefined,
     undos: 0,
-    loaded: [] as string[],
+    sessions: [] as string[],
     actions: [] as string[],
     hipPath: async () => "/scenes/test.hip",
-    loadHip: async (path: string) => { port.loaded.push(path); },
+    hipSessions: async () => [...port.sessions],
+    tagSession: async (path: string) => { if (!port.sessions.includes(path)) port.sessions.push(path); },
     action: async (kind: string, value: string) => { port.actions.push(`${kind}:${value}`); },
     memoryRead: async () => ({ text: port.memory, prevAvailable: port.prev !== undefined }),
     memoryReplace: async (text: string) => { port.prev = port.memory; port.memory = text; },
@@ -221,23 +222,86 @@ describe("SessionHub", () => {
     expect(socket.received[0]).toMatchObject({ type: "hello", hip: "/scenes/b.hip" });
   });
 
-  it("lists sessions with their hip and loads the hip when switching to one", async () => {
+  it("tags the conversation on the hip after a turn and lists only this hip's sessions", async () => {
     const houdini = fakeHoudini();
     const agent = new FakeAgent(0);
-    const hub = new SessionHub(agent, houdini, undefined, undefined, (path) => (path === "/sessions/old.jsonl" ? "/scenes/other.hip" : "/scenes/test.hip"));
+    const hub = new SessionHub(agent, houdini);
     const socket = new FakeSocket();
     hub.attach(socket);
     await settle();
     socket.emit("message", encode({ type: "list_sessions" }));
     await socket.waitFor("sessions");
-    expect((socket.received.find((m) => m.type === "sessions") as { sessions: { hip?: string }[] }).sessions[0]?.hip).toBe("/scenes/test.hip");
+    expect((socket.received.find((m) => m.type === "sessions") as { sessions: unknown[] }).sessions).toEqual([]);
+    socket.emit("message", encode({ type: "prompt", text: "hi" }));
+    await socket.waitFor("settled");
+    await settle();
+    expect(houdini.sessions).toEqual([agent.sessionPath]);
+    socket.received = [];
+    socket.emit("message", encode({ type: "list_sessions" }));
+    await socket.waitFor("sessions");
+    expect((socket.received.find((m) => m.type === "sessions") as { sessions: { path: string }[] }).sessions.map((s) => s.path)).toEqual([agent.sessionPath]);
+  });
+
+  it("greets with the conversation's cost so far", async () => {
+    const agent = new FakeAgent(0);
+    const hub = new SessionHub(agent, fakeHoudini());
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    expect(socket.received[0]).toMatchObject({ type: "hello", cost: agent.getStats().cost });
+  });
+
+  it("keeps listing the conversations after a Save As, because the list is read from the hip", async () => {
+    const houdini = fakeHoudini();
+    let hip = "/scenes/ship01.hiplc";
+    houdini.hipPath = async () => hip;
+    const agent = new FakeAgent(0);
+    const hub = new SessionHub(agent, houdini);
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "prompt", text: "hi" }));
+    await socket.waitFor("settled");
+    await settle();
+    hip = "/scenes/ship02.hiplc";
+    socket.received = [];
+    socket.emit("message", encode({ type: "list_sessions" }));
+    await socket.waitFor("sessions");
+    expect((socket.received.find((m) => m.type === "sessions") as { sessions: { path: string }[] }).sessions.map((s) => s.path)).toEqual([agent.sessionPath]);
+  });
+
+  it("says so when the conversation could not be recorded on the hip", async () => {
+    const hub = new SessionHub(new FakeAgent(0), fakeHoudini({ tagSession: async () => { throw new Error("bridge gone"); } }));
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "prompt", text: "hi" }));
+    await socket.waitFor("settled");
+    await settle();
+    expect(socket.received.find((m) => m.type === "error")).toMatchObject({ message: expect.stringContaining("bridge gone") });
+  });
+
+  it("also lists sessions the old index recorded for this hip", async () => {
+    const agent = new FakeAgent(0);
+    const hub = new SessionHub(agent, fakeHoudini(), undefined, undefined, (hip) => (hip === "/scenes/test.hip" ? [agent.sessionPath ?? ""] : []));
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
+    socket.emit("message", encode({ type: "list_sessions" }));
+    await socket.waitFor("sessions");
+    expect((socket.received.find((m) => m.type === "sessions") as { sessions: unknown[] }).sessions).toHaveLength(1);
+  });
+
+  it("switching sessions never loads a hip", async () => {
+    const agent = new FakeAgent(0);
+    const hub = new SessionHub(agent, fakeHoudini());
+    const socket = new FakeSocket();
+    hub.attach(socket);
+    await settle();
     socket.emit("message", encode({ type: "switch_session", sessionPath: "/sessions/old.jsonl" }));
     await settle();
     expect(agent.calls).toContain("switch:/sessions/old.jsonl");
-    expect(houdini.loaded).toEqual(["/scenes/other.hip"]);
-    socket.emit("message", encode({ type: "switch_session", sessionPath: "/sessions/same.jsonl" }));
-    await settle();
-    expect(houdini.loaded).toEqual(["/scenes/other.hip"]);
+    expect(socket.types()).toEqual(["hello", "history", "hello", "history"]);
   });
 
   it("relays answers to the pane and button actions to Houdini", async () => {
@@ -284,5 +348,19 @@ describe("SessionHub", () => {
       expect.objectContaining({ action: "reconnect" }),
       expect.objectContaining({ action: "login" }),
     ]);
+  });
+});
+
+describe("followHip", () => {
+  it("keeps the conversation when the opened hip has had it", async () => {
+    const agent = new FakeAgent(0);
+    await followHip(agent, { hipSessions: async () => [agent.sessionPath ?? ""] });
+    expect(agent.calls).not.toContain("newSession");
+  });
+
+  it("starts a fresh conversation for a hip that has not", async () => {
+    const agent = new FakeAgent(0);
+    await followHip(agent, { hipSessions: async () => ["/sessions/other.jsonl"] });
+    expect(agent.calls).toContain("newSession");
   });
 });

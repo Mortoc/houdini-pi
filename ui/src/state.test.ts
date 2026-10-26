@@ -38,3 +38,26 @@ describe("the turn footer", () => {
     expect(state.lastTurn?.errors).toBe(2);
   });
 });
+
+describe("conversation cost", () => {
+  const hello = (cost: number): ServerMessage => ({ type: "hello", sessionId: "s", sessionPath: "/s.jsonl", model: undefined, thinkingLevel: "off", hip: undefined, sessionName: undefined, isStreaming: false, cost });
+
+  it("starts from what the conversation had already cost", () => {
+    expect(play([hello(0.25)]).cost).toBe(0.25);
+  });
+
+  it("keeps the running total and gives the turn footer only that turn's share", () => {
+    const state = play([hello(0.25), { type: "user_message", text: "a" }, { type: "settled", aborted: false, cost: 0.3, durationMs: 1 }]);
+    expect(state.cost).toBe(0.3);
+    expect(state.lastTurn?.cost).toBeCloseTo(0.05);
+    const next = play([{ type: "user_message", text: "b" }, { type: "settled", aborted: false, cost: 0.31, durationMs: 1 }], state);
+    expect(next.cost).toBe(0.31);
+    expect(next.lastTurn?.cost).toBeCloseTo(0.01);
+  });
+
+  it("resets with the conversation", () => {
+    const state = play([hello(0.25), { type: "settled", aborted: false, cost: 0.3, durationMs: 1 }, hello(0)]);
+    expect(state.cost).toBe(0);
+    expect(state.lastTurn).toBeUndefined();
+  });
+});

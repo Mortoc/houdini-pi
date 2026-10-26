@@ -1,12 +1,13 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 interface Record_ {
   hip: string;
 }
 
-/** Which hip each conversation worked on, so the sessions list can group by scene and loading one loads its hip. */
+/** Read-only: which hip each conversation worked on, from before the list lived inside the hip.
+ *  Kept so conversations from then still show in their scene's sessions tab. */
 export class SessionIndex {
   constructor(readonly file = join(homedir(), ".houdini-pi", "sessions.json")) {}
 
@@ -22,14 +23,9 @@ export class SessionIndex {
     }
   }
 
-  hipOf(sessionPath: string): string | undefined {
-    return this.load()[sessionPath]?.hip;
-  }
-
-  tag(sessionPath: string, hip: string) {
-    const index = this.load();
-    index[sessionPath] = { hip };
-    mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(this.file, `${JSON.stringify(index, null, 2)}\n`);
+  sessionsOf(hip: string): string[] {
+    return Object.entries(this.load())
+      .filter(([, record]) => record.hip === hip)
+      .map(([sessionPath]) => sessionPath);
   }
 }

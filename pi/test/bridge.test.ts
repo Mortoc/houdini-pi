@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { BridgeBusy, BridgeError, BridgeUnreachable, HoudiniBridge, commandTimeoutMs } from "../extensions/bridge.js";
+import { BridgeBusy, BridgeError, BridgeUnreachable, HoudiniBridge, WrongHoudini, commandTimeoutMs } from "../extensions/bridge.js";
 
 interface Seen {
   fn: string;
@@ -54,6 +54,23 @@ describe("HoudiniBridge", () => {
     expect(calls[0]?.kwargs["command"]).toBe("scene.get_scene_info");
     expect(calls[0]?.kwargs["params"]).toEqual({ verbose: true });
     expect(typeof calls[0]?.kwargs["request_id"]).toBe("string");
+  });
+
+  it("refuses a bridge that belongs to another Houdini, before running anything", async () => {
+    // Two Houdinis: the pane's is pid 64723, but 8100 is answered by pid 4516.
+    const { port, calls } = await fakeBridge((seen) => (seen.fn === "mcp.health" ? { status: "ok", pid: 4516, houdini_version: "22.0.429" } : { status: "success", data: {} }));
+    const bridge = new HoudiniBridge(port, fetch, undefined, 64723);
+    await expect(bridge.execute("scene.get_scene_info")).rejects.toBeInstanceOf(WrongHoudini);
+    await expect(bridge.runHelper("scene_context")).rejects.toBeInstanceOf(WrongHoudini);
+    expect(calls.map((c) => c.fn)).not.toContain("mcp.execute");
+  });
+
+  it("checks the owner once and then talks to its own Houdini", async () => {
+    const { port, calls } = await fakeBridge((seen) => (seen.fn === "mcp.health" ? { status: "ok", pid: 64723, houdini_version: "22.0.429" } : { status: "success", data: { ok: 1 } }));
+    const bridge = new HoudiniBridge(port, fetch, undefined, 64723);
+    await bridge.execute("a");
+    await bridge.execute("b");
+    expect(calls.map((c) => c.fn)).toEqual(["mcp.health", "mcp.execute", "mcp.execute"]);
   });
 
   it("turns an error envelope into a BridgeError carrying the code", async () => {

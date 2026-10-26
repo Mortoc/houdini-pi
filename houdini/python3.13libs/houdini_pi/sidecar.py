@@ -45,6 +45,61 @@ def software_render_wanted(env: dict[str, str] | None = None, settings_file: Pat
     return bool(settings.get("pane", {}).get("softwareRender", False))
 
 
+BRIDGE_PORT_ENV = "HOUDINI_PI_BRIDGE_PORT"
+_ASK_HOUDINI = object()
+
+
+def _bridge_startup() -> Any:
+    try:
+        from fxhoudinimcp_server import startup
+
+        return startup
+    except Exception:  # not inside Houdini, or the plugin is not loaded
+        return None
+
+
+def bridge_port(env: dict[str, str] | None = None, startup: Any = _ASK_HOUDINI) -> int | None:
+    """The port of *this* Houdini's fxhoudinimcp bridge. None: it is still starting, ask again.
+
+    The bridge takes the first free port from FXHOUDINIMCP_PORT (8100), so a
+    second Houdini serves on 8101. Assuming 8100 sent that session's agent to
+    the other Houdini. The running server knows its port; ask it.
+    `HOUDINI_PI_BRIDGE_PORT` overrides.
+    """
+    env = os.environ if env is None else env
+    if env.get(BRIDGE_PORT_ENV):
+        return int(env[BRIDGE_PORT_ENV])
+    if startup is _ASK_HOUDINI:
+        startup = _bridge_startup()
+    if startup is not None:
+        try:
+            if startup.is_running():
+                return int(startup.get_port())
+            if startup.is_starting():
+                return None
+        except AttributeError:  # an fxhoudinimcp without these
+            pass
+    return int(env.get("FXHOUDINIMCP_PORT") or 8100)
+
+
+ZOOM_MIN, ZOOM_MAX = 0.25, 5.0  # QWebEngineView's accepted zoom range
+
+
+def pane_zoom(scale: float | None) -> float:
+    """The web view's zoom factor for Houdini's Global UI Size (`hou.ui.globalScaleFactor()`).
+
+    Houdini scales its own widgets by that factor rather than through Qt, so
+    the page renders at 1x unless it is zoomed to match. None or junk: 1.0.
+    """
+    try:
+        scale = float(scale)
+    except (TypeError, ValueError):
+        return 1.0
+    if not scale > 0:
+        return 1.0
+    return min(max(scale, ZOOM_MIN), ZOOM_MAX)
+
+
 def auto_layout_wanted(env: dict[str, str] | None = None, settings_file: Path = SETTINGS_FILE) -> bool | None:
     """Whether to set FXHOUDINIMCP_AUTO_LAYOUT, and to what. None: leave it alone.
 

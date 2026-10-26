@@ -185,7 +185,7 @@ export class PiAgent implements AgentLike {
 
   async listSessions(): Promise<SessionRef[]> {
     const infos = await SessionManager.list(this.options.cwd);
-    return infos.map((info) => ({ id: info.id, path: info.path, name: info.name, firstMessage: info.firstMessage, modified: info.modified.getTime(), hip: undefined }));
+    return infos.map((info) => ({ id: info.id, path: info.path, name: info.name, firstMessage: info.firstMessage, modified: info.modified.getTime() }));
   }
 
   async compact() { await this.session.compact(); }

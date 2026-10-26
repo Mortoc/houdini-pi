@@ -33,6 +33,17 @@ export class BridgeBusy extends Error {
   }
 }
 
+/**
+ * The port answers, but as a different Houdini than the one this agent belongs to. With two
+ * Houdinis open the second one's bridge moves to 8101; talking to 8100 anyway put one
+ * session's agent to work in the other session's scene.
+ */
+export class WrongHoudini extends Error {
+  constructor(public readonly url: string, public readonly expectedPid: number, public readonly actualPid: number | undefined) {
+    super(`The Houdini bridge at ${url} belongs to another Houdini (pid ${actualPid ?? "unknown"}), not this one (pid ${expectedPid}). Close and reopen the agent pane so it finds this Houdini's bridge.`);
+  }
+}
+
 /** What fxhoudinimcp's dispatcher allows a bounded command when nothing overrides it. */
 export const BRIDGE_DEFAULT_TIMEOUT_S = 120;
 /** How much longer than the bridge this client waits, so the bridge's own TIMEOUT answer arrives first. */
@@ -95,6 +106,8 @@ export class HoudiniBridge {
     private readonly fetchImpl: typeof fetch = fetch,
     /** One deadline for every call; by default each command gets the bridge's own plus a margin. */
     readonly timeoutMs?: number,
+    /** The Houdini this bridge must belong to. Checked once, before the first command. */
+    readonly expectedPid?: number,
   ) {
     this.url = `http://127.0.0.1:${port}/api`;
   }
@@ -134,7 +147,25 @@ export class HoudiniBridge {
     }
   }
 
+  private owner: Promise<void> | undefined;
+
+  /** Refuse to run anything in a Houdini other than `expectedPid`. A failed check is retried on the next call. */
+  private checkOwner(): Promise<void> {
+    if (this.expectedPid === undefined) return Promise.resolve();
+    this.owner ??= this.health().then(
+      (health) => {
+        if (health.pid !== this.expectedPid) throw new WrongHoudini(this.url, this.expectedPid!, health.pid);
+      },
+      (error) => {
+        this.owner = undefined;
+        throw error;
+      },
+    );
+    return this.owner;
+  }
+
   async execute(command: string, params: Record<string, unknown> = {}): Promise<unknown> {
+    await this.checkOwner();
     const envelope = (await this.call("mcp.execute", { command, params, request_id: randomUUID() }, this.timeoutMs ?? commandTimeoutMs(command))) as Envelope;
     if (envelope.status === "success") return envelope.data;
     if (envelope.status === "error") throw new BridgeError(envelope.error.code, envelope.error.message, envelope.error.traceback);
